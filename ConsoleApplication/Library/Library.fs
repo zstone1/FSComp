@@ -1,15 +1,14 @@
 ﻿module Parser
 open FParsec
 open FParsec.CharParsers
+open System
 
 exception CompilerError of string
 
-type Literal = 
- | IntLit of int
- | StringLit of string
-
 type Expression =
- | Atom of Literal
+ | IntLit of int
+ | StringLit of string 
+ | Variable of string
  | Func of string * (Expression list)
 
 type Statement = 
@@ -35,8 +34,9 @@ type Function = {
 type ParserData = unit
  
 let allowabeNameChar = letter
-let parseName = manyChars letter
+let parseName = many1Chars letter .>> spaces
 let tok s = pstring s .>> spaces >>% ()
+let tok2 s = spaces >>. tok s
 
 let rec parseExpression' (): Parser<Expression,ParserData> =
   let parseInt = pint32 .>> spaces |>> IntLit
@@ -48,48 +48,55 @@ let rec parseExpression' (): Parser<Expression,ParserData> =
         | 't' -> '\t'
         |  c  ->  c
     let escaped = pstring "\\" >>. (anyOf "\\nrt\"" |>> unescapeChar)
-    between (pstring "\"") (tok "\"") (manyChars (normal <|> escaped)) |>> StringLit
-
-  let parseAtom = parseInt <|> parseString |>> Atom
+    let strChar = (manyChars (normal <|> escaped)) 
+    between (pstring "\"") (tok "\"") strChar |>> StringLit
+  let parseVariable = parseName |>> Variable
   let parseFunc = parse {
-      let! name = parseName 
+      let! name = parseName
       do! (tok "(") 
       let! args = sepBy (parseExpression' ()) (tok ",")
       do! (tok ")") 
       return Func (name, args)
   }
-  parseAtom <|> parseFunc <?> "Failed to parse expression"
+  
+  attempt parseInt <|> 
+  attempt parseString <|> 
+  attempt parseFunc <|> 
+  attempt parseVariable <?> 
+  "Failed to parse expression"
 
 let parseExpression = parseExpression'()
 
 let rec parseStatement' () : Parser<Statement, ParserData> = 
   let parseReturn = tok "return " >>. parseExpression |>> ReturnStat
-  let parseIfStat = between (tok "(") (tok ")") (parseExpression) 
-                    .>>. parseBody
-                    |>> IfStat 
+  let parseIfStat = tok "if"
+                >>. between (tok "(") (tok ")") (parseExpression) 
+               .>>. parseBody
+                |>> IfStat 
   let parseExecution = parseExpression |>> Execution
-  let parseDeclaration = parseName .>>. parseName |>> Declaration 
-  let parseAssignment = parse{
-    let! name = parseName
-    do! tok "="
-    let! value = parseExpression
-    return Assignment (name, value)
-  }
+  let parseDeclaration = parseName 
+                    .>>. parseName 
+                     |>> Declaration 
+  let parseAssignment = parseName
+                    .>> tok "="
+                   .>>. parseExpression
+                    |>> Assignment
   
-  parseReturn <|> 
-  parseIfStat <|> 
-  parseExecution <|> 
-  parseDeclaration <|>
-  parseAssignment
-and parseBody =  between (tok "{") (tok "}") (sepBy (parseStatement'()) (tok ";"))
+  attempt parseReturn      <|> 
+  attempt parseIfStat      <|> 
+  attempt parseAssignment  <|>
+  attempt parseDeclaration <|>
+  attempt parseExecution   <?> 
+  "Failed to parse statement"
+and parseBody =  between (tok "{") (tok "}") (sepEndBy (parseStatement'()) (tok ";"))
 
 let parseStatement = parseStatement'()
 
-let parseSignature : Parser<FuncSignature, ParserData> = 
-  let parseSignature isStatic = parse{
+let parseSignature : Parser<FuncSignature, ParserData> = parse {
     let! access = parseName
-    do! if isStatic then tok "static" else preturn ()
-    let! returnTy = parseName
+    let! isStatic = attempt (tok "static") >>% true
+                <|> preturn false 
+    let! returnTy = parseName 
     let! name = parseName
     let! args = sepBy (parseName .>>. parseName) (tok ",")
     return {
@@ -100,7 +107,6 @@ let parseSignature : Parser<FuncSignature, ParserData> =
       name = name
     }
   }
-  parseSignature true <|> parseSignature false
   
 let parseFunction : Parser<Function, ParserData> = parse {
   let! signature = parseSignature
