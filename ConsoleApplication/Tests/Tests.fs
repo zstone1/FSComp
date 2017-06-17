@@ -111,9 +111,8 @@ module ASTBuilderTests =
  
   [<Test>]
   let ``build simple AST``() = 
-    let parsed = parseProgram @"
-    public static int main(){
-        int x ;
+    let parsed = parseProgram @"public int main(){
+        int x;
         x = 2;
         if(x)
         {

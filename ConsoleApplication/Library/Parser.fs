@@ -38,56 +38,56 @@ let tok2 s = spaces >>. tok s
 let betweenParens a = between (tok "(") (tok ")") a
 let betweenCurlys a = between (tok "{") (tok "}") a
 
-let rec parseExpression' () =
-  let parseInt = pint32 .>> spaces |>> IntLit
-  let parseString = 
-    let normal = satisfy (fun c -> c <>'\\' && c <> '"')
-    let unescapeChar = function
+let parseExpression, parseExpressionRef = createParserForwardedToRef()
+
+do parseExpressionRef := 
+   let parseInt = pint32 .>> spaces |>> IntLit
+   let parseString = 
+     let normal = satisfy (fun c -> c <>'\\' && c <> '"')
+     let unescapeChar = function
         | 'n' -> '\n' 
         | 'r' -> '\r'
         | 't' -> '\t'
         |  c  ->  c
-    let escaped = pstring "\\" >>. (anyOf "\\nrt\"" |>> unescapeChar)
-    let strChar = (manyChars (normal <|> escaped)) 
-    between (pstring "\"") (tok "\"") strChar |>> StringLit
-  let parseVariable = parseName |>> Variable
-  let parseFunc = parse { 
-    let! name = parseName
-    let! args = sepBy (parseExpression' ()) (tok ",") |> betweenParens 
-    return Func (name,args)}
+     let escaped = pstring "\\" >>. (anyOf "\\nrt\"" |>> unescapeChar)
+     let strChar = (manyChars (normal <|> escaped)) 
+     between (pstring "\"") (tok "\"") strChar |>> StringLit
+   let parseVariable = parseName |>> Variable
+   let parseFunc = parse { 
+     let! name = parseName
+     let! args = sepBy parseExpression (tok ",") |> betweenParens 
+     return Func (name,args)}
               
-  attempt parseInt      <|> 
-  attempt parseString   <|> 
-  attempt parseFunc     <|> 
-  attempt parseVariable <?> 
-  "Failed to parse expression"
+   attempt parseInt      <|> 
+   attempt parseString   <|> 
+   attempt parseFunc     <|> 
+   attempt parseVariable <?> 
+   "Failed to parse expression"
 
-let parseExpression = parseExpression'()
+let parseStatement, parseStatementRef = createParserForwardedToRef()
 
-let rec parseStatement' () =
-  let parseReturn = tok "return " >>. parseExpression |>> ReturnStat
-  let parseIfStat = tok "if"
-                >>. (parseExpression |> betweenParens)
-               .>>. parseBody
-                |>> IfStat 
-  let parseExecution = parseExpression |>> Execution
-  let parseDeclaration = parseName 
-                    .>>. parseName 
-                     |>> Declaration 
-  let parseAssignment = parseName
-                    .>> tok "="
-                   .>>. parseExpression
-                    |>> Assignment
-  
-  attempt parseReturn      <|> 
-  attempt parseIfStat      <|> 
-  attempt parseAssignment  <|>
-  attempt parseDeclaration <|>
-  attempt parseExecution   <?> 
-  "Failed to parse statement"
-and parseBody =  sepEndBy (parseStatement'()) (tok ";") |> betweenCurlys
-
-let parseStatement = parseStatement'()
+do parseStatementRef :=
+   let parseReturn = tok "return " >>. parseExpression |>> ReturnStat
+   let parseBody =  sepEndBy parseStatement (tok ";") |> betweenCurlys
+   let parseIfStat = tok "if"
+                 >>. (parseExpression |> betweenParens)
+                .>>. parseBody
+                 |>> IfStat 
+   let parseExecution = parseExpression |>> Execution
+   let parseDeclaration = parseName 
+                     .>>. parseName 
+                      |>> Declaration 
+   let parseAssignment = parseName
+                     .>> tok "="
+                    .>>. parseExpression
+                     |>> Assignment
+   
+   attempt parseReturn      <|> 
+   attempt parseIfStat      <|> 
+   attempt parseAssignment  <|>
+   attempt parseDeclaration <|>
+   attempt parseExecution   <?> 
+   "Failed to parse statement"
 
 let parseSignature = parse {
     let! access = parseName
@@ -107,7 +107,7 @@ let parseSignature = parse {
   
 let parseFunction = parse {
   let! signature = parseSignature
-  let! body = parseBody
+  let! body = sepEndBy parseStatement (tok ";") |> betweenCurlys
   return {signature = signature; body = body} }
 
 let parseModule = spaces >>. many parseFunction .>> spaces .>> eof
