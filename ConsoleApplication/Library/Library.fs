@@ -113,7 +113,7 @@ let parseModule = many parseFunction
 let public parseProgram s : Function list =
   match run parseModule s with
   | Success(result,_,_) -> result
-  | Failure(err,_,_) -> raise (CompilerError ("parser failed with " + err))
+  | Failure(err,_,_) -> raise (CompilerError ("parser failed: " + err))
   
 
 
