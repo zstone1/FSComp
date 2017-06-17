@@ -55,7 +55,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="Library.fs" />
+    <Compile Include="CoreTypes.fs" />
+    <Compile Include="Parser.fs" />
+    <Compile Include="ASTBuilder.fs" />
     <None Include="packages.config" />
     <None Include="Script.fsx" />
   </ItemGroup>

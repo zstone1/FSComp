@@ -87,6 +87,8 @@ let ``parse non-static func``() =
 
 let funcCompare = parseComparison parseFunction
 
+let public rtn5 = @"public int f(){return 5; }"
+
 [<Test>]
 let ``parse function``() = 
   let expected = {
@@ -100,16 +102,28 @@ let ``parse function``() =
       }  
     body = [ReturnStat (IntLit 5)] 
   }
-  expected |>  funcCompare 
-    @"public int f(){
-        return 5;
-      }"
+  expected |>  funcCompare rtn5
   
 
+module ASTBuilderTests =
+  open ASTBuilder
+  open System
  
- 
- 
- 
+  [<Test>]
+  let ``build simple AST``() = 
+    let parsed = parseProgram @"
+    public static int main(){
+        int x ;
+        x = 2;
+        if(x)
+        {
+            reutrn 1;
+        };
+        return 0;
+    } 
+    "
+    let AST = convertModule parsed
+    printf "%A" AST
  
  
  
