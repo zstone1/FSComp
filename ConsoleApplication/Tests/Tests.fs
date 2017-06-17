@@ -61,3 +61,57 @@ let ``parse declaration``() = Declaration ("ty","foo")
 [<Test>] 
 let ``parse assignment``() = Assignment ("foo", Variable "x")
                           |> statCompare "foo = x"
+
+let sigCompare = parseComparison parseSignature
+[<Test>]
+let ``parse static func``() =
+  let expected = {  
+    access = "public"
+    isStatic = true
+    returnTy = "int"
+    args = [("foo","bar")]
+    name = "f"
+  }  
+  expected |> sigCompare "public static int f(foo bar)"
+
+[<Test>]
+let ``parse non-static func``() =
+  let expected = {  
+    access = "public"
+    isStatic = false
+    returnTy = "int"
+    args = [("foo","bar"); ("fiz","buz")]
+    name = "f"
+  }  
+  expected |> sigCompare "public int f(foo bar, fiz buz)"
+
+let funcCompare = parseComparison parseFunction
+
+[<Test>]
+let ``parse function``() = 
+  let expected = {
+    signature = 
+      {  
+        access = "public"
+        isStatic = false
+        returnTy = "int"
+        args = []
+        name = "f"
+      }  
+    body = [ReturnStat (IntLit 5)] 
+  }
+  expected |>  funcCompare 
+    @"public int f(){
+        return 5;
+      }"
+  
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 

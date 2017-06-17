@@ -59,9 +59,9 @@ let rec parseExpression' (): Parser<Expression,ParserData> =
       return Func (name, args)
   }
   
-  attempt parseInt <|> 
-  attempt parseString <|> 
-  attempt parseFunc <|> 
+  attempt parseInt      <|> 
+  attempt parseString   <|> 
+  attempt parseFunc     <|> 
   attempt parseVariable <?> 
   "Failed to parse expression"
 
@@ -98,7 +98,8 @@ let parseSignature : Parser<FuncSignature, ParserData> = parse {
                 <|> preturn false 
     let! returnTy = parseName 
     let! name = parseName
-    let! args = sepBy (parseName .>>. parseName) (tok ",")
+    let! args = sepBy (parseName .>>. parseName) (tok ",") 
+             |> between (tok "(") (tok ")") 
     return {
       access = access
       isStatic = isStatic
@@ -114,7 +115,7 @@ let parseFunction : Parser<Function, ParserData> = parse {
   return {signature = signature; body = body}
 }
 
-let parseModule = many parseFunction
+let parseModule = many parseFunction .>> eof
 
 let public parseProgram s : Function list =
   match run parseModule s with
