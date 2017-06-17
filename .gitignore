@@ -1,5 +1,5 @@
-obj/
-bin/
-.idea/
+obj
+bin
+.idea
 *.dll
 *.exe
