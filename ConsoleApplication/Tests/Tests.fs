@@ -111,18 +111,29 @@ module ASTBuilderTests =
  
   [<Test>]
   let ``build simple AST``() = 
-    let parsed = parseProgram @"public int main(){
+    let prgm =  @"public int main(){
         int x;
         x = 2;
         if(x)
         {
-            reutrn 1;
+            return 1;
         };
         return 0;
-    } 
-    "
-    let AST = convertModule parsed
-    printf "%A" AST
+    }"
+    let p = prgm |> parseProgram |> convertModule
+    
+    Assert.AreEqual(
+      [{ signature = {access = Public;
+                     isStatic = false;
+                     returnTy = IntTy;
+                     name = "main";
+                     args = [];};
+         body =  [Declaration (IntTy,"x"); Assignment ("x",(IntTy, IntLit 2));
+    IfStat ((IntTy, Variable "x"),[ReturnStat (IntTy, IntLit 1)]);
+    ReturnStat (IntTy, IntLit 0)] }], p)
+    
+    //let AST = convertModule parsed
+    //printf "%A" AST
  
  
  

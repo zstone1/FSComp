@@ -1,5 +1,7 @@
 module ASTBuilder
 open Parser
+open FSharpx.State
+open FSharpx.Functional
 
 type Ty = IntTy | StringTy
   
@@ -10,7 +12,11 @@ type Scope = {
   functions : (Ty * string * Ty list) list
 }
 
-let findVariable scope v = List.tryFind (fun (_,n) -> n = v) scope.variables 
+type Scoped<'T> = State<'T,Scope>
+let scope = state
+
+let findVariable v scope = List.tryFind (fun (_,n) -> n = v) scope.variables
+let findFunction name args scope = List.tryFind (fun (_,n,l) -> n = name && args = l) scope.functions
 
 type ASTExpression = Ty * Expression
  
@@ -52,41 +58,60 @@ let convertSignature (s: FuncSignature) = {
     name = s.name
     args = List.map (fun (a,b) -> (parseTy a,b)) s.args }
 
-let rec convertExpr (scope: Scope) = function
+let hardCodedFunctions = [(IntTy, "Add", [IntTy; IntTy]); (IntTy, "Sub", [IntTy; IntTy])]
+
+let rec convertExpr e scope = 
+  match e with
   | IntLit _ as x -> (IntTy, x)
   | StringLit _ as x -> (StringTy, x)
-  | Variable v as x -> match findVariable scope v with
-                       | Some (t,_) -> (t,x)
-                       | None  -> raise (CompilerError (sprintf "variable %s is not in scope" v))
-  | Func (v,args) as x -> let args' = List.map (convertExpr scope) args
-                          let argMatch (_, name, candArgs) = name = v 
-                                                          && List.length candArgs = List.length args'
-                          match List.tryFind argMatch scope.functions with
-                          | Some (ty,_,_) -> (ty, x)
-                          | None -> raise (CompilerError (sprintf "function %A is not in scope" x))
+  | Variable v as x ->
+     match findVariable v scope with
+     | Some (t,_) -> (t,x)
+     | None  -> failf "variable %s is not in scope" v
+  | Func (v,args) as x -> 
+    let args' = List.map (flip convertExpr scope >> fst) args
+    match findFunction v args' scope with
+    | Some (ty,_,_) -> (ty, x)
+    | None -> failf "function %A is not in scope" x
 
-//TODO: make this tail recurisve with a state monad.
-let rec convertBody (scope: Scope) = function
-  | Parser.ReturnStat r::[] -> [convertExpr scope r |> ReturnStat]
-  | Parser.Declaration (t,s) :: xs ->
-    match findVariable scope s with
-    | Some _ -> failComp <| sprintf "variable %s is already in scope" s
-    | None -> Declaration (parseTy t, s) :: convertBody {scope with variables = (parseTy t,s) :: scope.variables} xs
-  | Parser.Execution e :: xs -> (convertExpr scope e |> Execution) :: convertBody scope xs
-  | Parser.Assignment (s,e) :: xs -> 
-    match findVariable scope s, convertExpr scope e with
-    | Some (varTy,_), ((exprTy,_) as e') when varTy = exprTy ->  Assignment (s,e') :: convertBody scope xs
-    | Some (varTy,_), (exprTy,_) -> failComp <| sprintf "variable %s has type %A, but expected %A" s varTy exprTy
-    | None, _ -> failComp <| sprintf "variable %s is not in scope" s
-  | Parser.IfStat (e,stats) :: xs -> IfStat(convertExpr scope e, convertBody scope stats) :: convertBody scope xs
-                                        
-  | [] -> raise (CompilerError (sprintf "no return statement at end of this function"))
-  | Parser.ReturnStat r::(x::xs) -> raise (CompilerError (sprintf "return statement not and end of clause"))
+let rec convertStatement (sgn: ASTSignature) = function
+  | Parser.ReturnStat r -> scope {
+      let! (ty, r') as e' = convertExpr r <!> getState 
+      return match ty = sgn.returnTy with
+             | true -> [ReturnStat e'] 
+             | false -> failf "return %A didn't match expected %A" r sgn.returnTy }
+  
+  | Parser.Declaration (t,s) -> scope {
+      let! x = findVariable s <!> getState
+      match x with
+      | None -> let decl = parseTy t, s
+                do! updateState (fun st -> {st with variables = decl :: st.variables}) |> ignoreM
+                return [Declaration decl]
+      | Some _ -> return failf "variable %s is already in scope" s }
+      
+              
+  | Parser.Execution e -> convertExpr e >> Execution >> List.singleton <!> getState 
+  
+  | Parser.Assignment (s,e) ->  scope {
+      let! e' = convertExpr e <!> getState
+      let! found = findVariable s <!> getState
+      return match (found, e') with
+             | Some (t1,_), (t2,_) when t1 = t2 ->  [Assignment (s,e')]
+             | Some (t1,_), (t2,_) -> failf "variable %s has type %A, but expected %A" s t1 t2
+             | None, _ -> failf "variable %s is not in scope" s }
+            
+  | Parser.IfStat (e,stats) -> scope {
+      let! guard = convertExpr e <!> getState 
+      let! before = getState //I need to ensure the scope is restored after popping out of the boyd
+      let! body = List.concat <!> mapM (convertStatement sgn) stats
+      do! putState before
+      return [IfStat (guard, body)] }
 
 let convertFunction ({signature = sgn; body = body }:ParserFunction) : ASTFunction =
   let sgn' = convertSignature sgn
-  let scope = {variables = sgn'.args; functions = [(sgn'.returnTy, sgn'.name, List.map fst sgn'.args)]}
-  let body' = convertBody scope body
+  let thisFunc = (sgn'.returnTy, sgn'.name, List.map fst sgn'.args) //For recursion
+  let scopeInit = {variables = sgn'.args; functions = thisFunc :: hardCodedFunctions}
+  let body' = mapM (convertStatement sgn') body |> flip eval scopeInit |> List.concat
   {signature = sgn'; body =body'}
 
 let public convertModule = List.map convertFunction
