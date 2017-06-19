@@ -128,7 +128,7 @@ module ASTBuilderTests =
                      returnTy = IntTy;
                      name = "main";
                      args = [];};
-         body =  [Declaration (IntTy,"x"); Assignment ("x",(IntTy, IntLit 2));
+         body =  [Declaration (Var (IntTy,"x")); Assignment ("x",(IntTy, IntLit 2));
     IfStat ((IntTy, Variable "x"),[ReturnStat (IntTy, IntLit 1)]);
     ReturnStat (IntTy, IntLit 0)] }], p)
     

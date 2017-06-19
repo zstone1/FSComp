@@ -31,3 +31,6 @@ let ignoreM s = map ignore s
 
 let public trd (_,_,c) = c
 
+let inline public (|>>) m f = f <!> m
+
+let flip3' f a b c = f a c b

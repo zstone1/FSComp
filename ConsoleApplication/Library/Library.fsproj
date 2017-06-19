@@ -70,9 +70,10 @@
     <Compile Include="CoreTypes.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="ASTBuilder.fs" />
+    <Compile Include="VariableAssignment.fs" />
     <None Include="packages.config" />
     <None Include="Script.fsx" />
-  </ItemGroup>
+ </ItemGroup>
   <PropertyGroup>
     <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
   </PropertyGroup>
