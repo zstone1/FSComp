@@ -2,8 +2,7 @@ module VariableAssignment
 open Parser
 open ASTBuilder
 open FSharpx.State 
-open FSharpx.State
- 
+open FSharpx.Functional
  
 type Register = 
   | RAX
@@ -26,27 +25,38 @@ type Memory =
   | ByReg_Num of Register * int
   | ByReg_Scale_Num of Register * Scale * int
 type Location = Reg of Register | Mem of Memory | Stack
+type AssignedVar<'T> = AVar of 'T * Location
 
-type AssignedVar = AVar of Ty * string * Location
-
-type VarState = {
-  variables : AssignedVar list
-  functions : ASTFuncRef  list
-}
+type VarStateGen<'T> = Scope<AssignedVar<'T> ,ASTFuncRef>
+type VarState = VarStateGen<ASTVariable>
 let vars x = x.variables
 let funcs x = x.functions
-
 type VarStateM<'t> = State<'t,VarState>
 
 let getAssignedRegisters st = 
   List.choose 
-    (function | (AVar (_,_,Reg x))  -> Some x | _ -> None)
+    (function | (AVar (_, Reg x))  -> Some x | _ -> None) 
     st.variables
 
+let addVariable v st : VarState = {st with variables = v :: st.variables}
+let addVariables vs st : VarState = {st with variables = vs @ st.variables}
 
+let assign loc var = AVar (var,loc) 
+                  |> addVariable 
+                  |> updateState 
+                  
+let callingConvention = seq {
+  yield! List.map Reg [RDI;RSI;RDX;RCX;R8;R9]  
+  yield! Seq.initInfinite (konst Stack)
+}
+  
 //based on calling convention for C functions
-//let initializeScope args = 
-
+let initScope a = a
+               |> flip Seq.zip callingConvention
+               |> Seq.map AVar
+               |> Seq.toList
+               |> addVariables
+               |> updateState
 
 
 
