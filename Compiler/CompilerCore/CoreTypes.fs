@@ -2,9 +2,9 @@
 module CoreTypes
 open FSharpx.State
 
-exception CompilerError of string
+exception CompilerErrorException of string
 
-let public failComp s = raise (CompilerError s)
+let public failComp s = raise (CompilerErrorException s)
 let public failf a = Printf.kprintf failComp a
 
 type CompilerState = {

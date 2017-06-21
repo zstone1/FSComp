@@ -115,7 +115,7 @@ let parseModule = spaces >>. many parseFunction .>> spaces .>> eof
 let public parseProgram s : ParserFunction list =
   match run parseModule s with
   | Success(result,_,_) -> result
-  | Failure(err,_,_) -> raise (CompilerError ("parser failed: " + err))
+  | Failure(err,_,_) -> raise (CompilerErrorException ("parser failed: " + err))
   
 
 

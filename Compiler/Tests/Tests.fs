@@ -11,6 +11,7 @@ let parseComparison parser str expected =
   
 let exprCompare = parseComparison parseExpression
 
+definitely doesn't compile
 [<Test>]
 let ``parse int literal``() = 
   IntLit 123 |> exprCompare "123 " 
