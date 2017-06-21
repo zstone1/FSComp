@@ -1,17 +1,31 @@
-﻿<Project Sdk="FSharp.NET.Sdk;Microsoft.NET.Sdk">
-
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Project Sdk="FSharp.NET.Sdk;Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp1.1</TargetFramework>
+    <TargetFramework>netcoreapp1.0</TargetFramework>
+    <PackageTargetFallback>
+     $(PackageTargetFallback);portable-net45+win81
+   </PackageTargetFallback>
   </PropertyGroup>
-
   <ItemGroup>
-    <Compile Include="Program.fs" />
+    <compile Include="FSharpx.fs"/>
+    <compile Include="CoreTypes.fs"/>
+    <compile Include="Parser.fs"/>
+    <compile Include="ASTBuilder.fs"/>
+    <Compile Include="VariableAssignment.fs"/>
+    <Compile Include="Tests.fs"/>
+    <Compile Include="Program.fs"/>
   </ItemGroup>
-
   <ItemGroup>
-    <PackageReference Include="FSharp.Core" Version="4.1.*" />
-    <PackageReference Include="FSharp.NET.Sdk" Version="1.0.*" PrivateAssets="All" />
+    <PackageReference Include="FSharp.Core" Version="4.1.*"/>
+    <PackageReference Include="FSharp.NET.Sdk" Version="1.0.*" PrivateAssets="All"/>
+    <PackageReference Include="FParsec" Version="1.0.2"/>
+    <PackageReference Include="Microsoft.NETCore.Portable.Compatibility" Version="1.0.2"/>
+    <PackageReference Include="NUnit" Version="3.7.1"/>
+    <PackageReference Include="NUnit.Runners" Version="3.6.1"/>
+    <PackageReference Include="NUnit.Console" Version="3.6.1"/>
+    <PackageReference Include="dotnet-test-nunit" Version="3.4.0-beta-3"/>
+    <PackageReference Include="Microsoft.TestPlatform.TestHost" Version="15.0.0"/>
+    <PackageReference Include="NUnit3TestAdapter" Version="3.7.0"/>
   </ItemGroup>
-
 </Project>
