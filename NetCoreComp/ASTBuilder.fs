@@ -18,17 +18,19 @@ type Scope<'V,'F> = {
 type private Scoped<'T> = State<'T,Scope<ASTVariable, ASTFuncRef>>
 let scope = state
 
-let findVariable v scope = List.tryFind (fun (Var (_,n)) -> n = v) scope.variables
-let findFunction name args scope = List.tryFind (fun (FuncRef(_,n,l)) -> n = name && args = l) scope.functions
+let findVariable' v vars = List.tryFind (fun (Var (_,n)) -> n = v) vars
+let findVariable v scope = findVariable' v scope.variables
+let findFunction' name args funcs = List.tryFind (fun (FuncRef(_,n,l)) -> n = name && args = l) funcs
+let findFunction name args scope = findFunction' name args scope.functions
 
 type ASTExpression = Ty * Expression
  
 type ASTStatement = 
- | ReturnStat of ASTExpression
- | IfStat of ASTExpression * ASTStatement list
- | Execution of ASTExpression 
- | Declaration of ASTVariable
- | Assignment of string * ASTExpression
+  | ReturnStat of ASTExpression
+  | IfStat of ASTExpression * ASTStatement list
+  | Execution of ASTExpression 
+  | Declaration of ASTVariable
+  | Assignment of string * ASTExpression
  
 type ASTSignature = {
   access : Access
@@ -89,7 +91,6 @@ let rec convertExpr scope = function
 let rec convertExpr' = flip convertExpr
    
 let rec convertStatement (sgn: ASTSignature) = function
-
   | Parser.ReturnStat r -> 
         getState 
     |>> convertExpr' r 
@@ -105,8 +106,8 @@ let rec convertStatement (sgn: ASTSignature) = function
   | Parser.Execution e -> getState |>> (convertExpr' e >> Execution)
   
   | Parser.Assignment (s,e) ->  scope {
-      let! e' = getState |>> convertExpr' e 
-      let! found = getState |>> findVariable s
+      let! e' =  convertExpr' e <!> getState 
+      let! found = findVariable s <!> getState 
       return match (found, e') with
              | Some (Var (t1,_)), (t2,_) when t1 = t2 ->  (s,e') |> Assignment
              | Some (Var (t1,_)), (t2,_) -> failf "variable %s has type %A, but expected %A" s t1 t2

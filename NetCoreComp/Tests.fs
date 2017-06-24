@@ -1,110 +1,102 @@
 ﻿module ParserTests
 
 open FParsec
-open NUnit.Framework
-open NUnit.Framework.Constraints
 open Parser
+open NUnit.Framework
+open Swensen.Unquote
 
 module parserTests = 
-  let parseComparison parser str expected = 
+  let parseBit parser str = 
     match run parser str with
-    | Success(result,_,_) -> Assert.AreEqual(expected, result)
+    | Success(result,_,_) -> result
     | x -> failwithf "failed to parse %s with %A" str x
     
-  let exprCompare = parseComparison parseExpression
+  let parseExpr = parseBit parseExpression
+
+  [<Test>]
+  let ``parse int literal``() = IntLit 123 =! parseBit parseExpression "123 " 
+  
+  let strLitCompare input result = StringLit result =! parseExpr input
   
   [<Test>]
-  let ``parse int literal``() = 
-    IntLit 123 |> exprCompare "123 " 
-  
-  let strLitCompare input result = StringLit result |> exprCompare input
+  let ``parse string literals``() = StringLit "foo" =! parseExpr "\"foo\"" 
   
   [<Test>]
-  let ``parse string literals``() = "foo" |> strLitCompare "\"foo\"" 
+  let ``escape slashes``() = StringLit @"a\" =! parseExpr @"""a\\"""
   
   [<Test>]
-  let ``escape slashes``() = @"a\" |> strLitCompare @"""a\\"""
-  
-  [<Test>]
-  let ``escape others``() = "\n\r" |> strLitCompare @"""\n\r"""
+  let ``escape others``() = StringLit "\n\r" =! parseExpr @"""\n\r"""
   
   [<Test>] 
-  let ``variable name``() = Variable "myVar" |> exprCompare "myVar"
+  let ``variable name``() = Variable "myVar" =! parseExpr "myVar"
   
   [<Test>]
-  let ``empty function``() = Func ("foo",[]) |> exprCompare "foo()"
+  let ``empty function``() = Func ("foo",[]) =! parseExpr "foo()"
   
   [<Test>]
-  let ``one arg function``() = Func ("foo",[IntLit 123]) |> exprCompare "foo(123)"
+  let ``one arg function``() = Func ("foo",[IntLit 123]) =! parseExpr "foo(123)"
   
   [<Test>]
   let ``two arg function``() = Func ("foo",[IntLit 123; StringLit "str"; Variable "v"]) 
-                               |> exprCompare "foo(123, \"str\", v)"
+                               =! parseExpr "foo(123, \"str\", v)"
   [<Test>] 
-  let ``nested funtion``() = Func ("foo",[Func("bar",[])]) |> exprCompare "foo(bar())"
+  let ``nested funtion``() = Func ("foo",[Func("bar",[])]) =! parseExpr "foo(bar())"
   
-  let statCompare = parseComparison parseStatement
+  let statCompare = parseBit parseStatement
   
   [<Test>]
-  let ``parse return``() = ReturnStat (IntLit 5) |> statCompare "return 5"
+  let ``parse return``() = ReturnStat (IntLit 5) =! statCompare "return 5"
   
   [<Test>]
-  let ``parse execution``() = Execution (Func ("foo",[])) 
-                           |> statCompare "foo ()"
+  let ``parse execution``() = Execution (Func ("foo",[])) =! statCompare "foo ()"
+
   [<Test>] 
-  let ``parse if``() = IfStat (Variable "x",
-                         [ReturnStat (IntLit 5);
-                          Execution (Func ("foo", [Variable "y"]))])
-                    |> statCompare "if( x ) {return 5;foo(y);}"
+  let ``parse if``() = IfStat (Variable "x", [ReturnStat (IntLit 5); Execution (Func ("foo", [Variable "y"]))]) 
+                       =! statCompare "if( x ) {return 5;foo(y);}"
   [<Test>]
-  let ``parse declaration``() = Declaration ("ty","foo")
-                             |> statCompare "ty foo"
+  let ``parse declaration``() = Declaration ("ty","foo") =! statCompare "ty foo"
   
   [<Test>] 
-  let ``parse assignment``() = Assignment ("foo", Variable "x")
-                            |> statCompare "foo = x"
+  let ``parse assignment``() = Assignment ("foo", Variable "x") =! statCompare "foo = x"
   
-  let sigCompare = parseComparison parseSignature
+  let sigCompare = parseBit parseSignature
   [<Test>]
   let ``parse static func``() =
-    let expected = {  
+    {  
       access = "public"
       isStatic = true
       returnTy = "int"
       args = [("foo","bar")]
       name = "f"
-    }  
-    expected |> sigCompare "public static int f(foo bar)"
+    }  =! sigCompare "public static int f(foo bar)"
   
   [<Test>]
   let ``parse non-static func``() =
-    let expected = {  
+    {  
       access = "public"
       isStatic = false
       returnTy = "int"
       args = [("foo","bar"); ("fiz","buz")]
       name = "f"
-    }  
-    expected |> sigCompare "public int f(foo bar, fiz buz)"
+    }  =! sigCompare "public int f(foo bar, fiz buz)"
   
-  let funcCompare = parseComparison parseFunction
+  let funcCompare = parseBit parseFunction
   
   let public rtn5 = @"public int f(){return 5; }"
   
   [<Test>]
   let ``parse function``() = 
-    let expected = {
-      signature = 
-        {  
-          access = "public"
-          isStatic = false
-          returnTy = "int"
-          args = []
-          name = "f"
-        }  
-      body = [ReturnStat (IntLit 5)] 
-    }
-    expected |>  funcCompare rtn5
+    test <@ {
+             signature = 
+               {  
+                 access = "public"
+                 isStatic = false
+                 returnTy = "int"
+                 args = []
+                 name = "f"
+               }  
+             body = [ReturnStat (IntLit 5)] 
+    } = funcCompare rtn5 @>
   
 module ASTBuilderTests =
   open ASTBuilder
@@ -121,22 +113,53 @@ module ASTBuilderTests =
         };
         return 0;
     }"
-    let p = prgm |> parseProgram |> convertModule
+    test <@ [{ signature = {
+                             access = Public;
+                             isStatic = false;
+                             returnTy = IntTy;
+                             name = "main";
+                             args = [];
+                           };
+       body =  [
+                 Declaration (Var (IntTy,"x")); 
+                 Assignment ("x",(IntTy, IntLit 2));
+                 IfStat ((IntTy, Variable "x"),[ReturnStat (IntTy, IntLit 1)]);
+                 ReturnStat (IntTy, IntLit 0) 
+               ]
+     }] = (prgm |> parseProgram |> convertModule) @>
     
-    Assert.AreEqual(
-      [{ signature = {access = Public;
-                     isStatic = false;
-                     returnTy = IntTy;
-                     name = "main";
-                     args = [];};
-         body =  [
-                   Declaration (Var (IntTy,"x")); 
-                   Assignment ("x",(IntTy, IntLit 2));
-                   IfStat ((IntTy, Variable "x"),[ReturnStat (IntTy, IntLit 1)]);
-                   ReturnStat (IntTy, IntLit 0) 
-                 ]
-       }], p)
-    
- 
+  [<Test>]
+  let ``if scoping`` () = 
+    let prgm = @" public int main(){
+        if(1)
+        {
+          int y;
+          y = 3;
+        };
+        int y;
+        y = 4;
+        return y;
+    }"
+    test <@[{ signature = {access = Public;
+                   isStatic = false;
+                   returnTy = IntTy;
+                   name = "main";
+                   args = [];};
+       body = [
+                 IfStat((IntTy, (IntLit 1)), 
+                   [
+                     Declaration (Var (IntTy, "y"));
+                     Assignment ("y", (IntTy, IntLit 3))
+                   ]);
+                 Declaration (Var (IntTy, "y"));
+                 Assignment ("y", (IntTy, IntLit 4));
+                 ReturnStat (IntTy, Variable "y");
+              ]
+     }] = (prgm |> parseProgram |> convertModule ) @>
+  
+
+
+
+
  
  

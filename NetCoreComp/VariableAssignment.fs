@@ -2,6 +2,7 @@ module VariableAssignment
 
 open Parser
 open ASTBuilder
+open FSharp.Collections;
 open FSharpx
 open FSharpx.State
  
@@ -25,30 +26,94 @@ type Memory =
   | ByReg_Scale of Register * Scale
   | ByReg_Num of Register * int
   | ByReg_Scale_Num of Register * Scale * int
-type Location = Reg of Register | Mem of Memory | Stack
+
+type Location =
+  | Reg of Register 
+  | Mem of Memory 
+  | OnStack of int 
+  | Imm of int
+
+
 type AssignedVar<'T> = AVar of 'T * Location
 
-type VarStateGen<'T> = Scope<AssignedVar<'T> ,ASTFuncRef>
-type VarState = VarStateGen<ASTVariable>
-let vars x = x.variables
-let funcs x = x.functions
+type VarState = { 
+  variables : Map<string,AssignedVar<ASTVariable>>
+  functions : ASTFuncRef
+  stack : int
+}
+
+let setVars f st : VarState = {st with variables = f st.variables}
+
+let stack f st = {st with stack = f st}
+
+
 type VarStateM<'t> = State<'t,VarState>
 
+(*
 let getAssignedRegisters st = 
-  List.choose 
-    (function | (AVar (_, Reg x))  -> Some x | _ -> None) 
-    st.variables
+     st.variables 
+  |> Map.toSeq
+  |> Seq.map snd
+  |> Seq.choose ( function | AVar (_, Reg x)  -> Some x | _ -> None) 
 
-let addVariable v st : VarState = {st with variables = v :: st.variables}
-let addVariables vs st : VarState = {st with variables = vs @ st.variables}
+let verifyLocationAvailable = function
+  | Reg r -> state {
+    let! assigned = getAssignedRegisters <!> getState
+    return if Seq.contains r assigned
+      then failf "Register %A is not available" r
+      else () }
+  | OnStack i -> 
+*)
+
+
+(*
+  //{st with variables = Map.add name v st.variables}
+
+let pushStack v = state {
+  let! st = getState
+  let newStackDepth= st.stack + 1
+  do! putState {st with stack = newStackDepth}
+  
+  match avar with 
+  | (AVar (v, Reg r)) -> updateState (fun st -> {st with stack = st.stack + 1})
+  | x -> failf "Variable %A is not in a register, so cannot be pushed to stack" x
+
+
+
+}
+
+
+let popStack reg = state {
+  let! vs = stack <!> getState
+  match vs with
+  | [] -> return failf "Cannot pop an empty stack."
+  | v::vs -> do! updateState' (fun st -> {st with stack = vs})
+             do 
+
+}
+
 
 let assign loc var = AVar (var,loc) 
                   |> addVariable 
                   |> updateState 
                   
+let push v = state {
+  do! updateState (fun st -> ) |>> ignore
+  return AVar (v, OnStack)}
+
+
+let pop r = state {
+  let! {stack = s} as st = getState;
+  match s with
+  | v::vs -> do! putState { st with stack = vs} 
+             return v
+  | [] -> return failf "Cannot pop empty stack!"
+} 
+
 let callingConvention = seq {
-  yield! List.map Reg [RDI;RSI;RDX;RCX;R8;R9]  
-  yield! Seq.initInfinite (konst Stack)
+  let regs = [RDI;RSI;RDX;RCX;R8;R9]
+  let ops = List.map (fun r a -> AVar (a, Reg r) ) regs
+  yield! Seq.initInfinite (konst OnStack)
 }
   
 //based on calling convention for C functions
@@ -59,6 +124,9 @@ let initScope a = a
                |> addVariables
                |> updateState
 
+let setupCall ()
+ 
+*)
 
 
 

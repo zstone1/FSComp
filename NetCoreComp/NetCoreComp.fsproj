@@ -27,5 +27,6 @@
     <PackageReference Include="NUnit3TestAdapter" Version="3.8.0-*"/>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.*"/>
     <PackageReference Include="System.Runtime.InteropServices.RuntimeInformation" Version="4.3.0"/>
+    <PackageReference Include="Unquote" Version="3.2.0"/>
   </ItemGroup>
 </Project>
