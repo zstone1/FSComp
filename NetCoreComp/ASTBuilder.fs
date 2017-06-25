@@ -24,20 +24,22 @@ let findFunction' name args funcs = List.tryFind (fun (FuncRef(_,n,l)) -> n = na
 let findFunction name args scope = findFunction' name args scope.functions
 
 type ASTExpression = Ty * Expression
+
+let name (Var (_,n)) = n
  
 type ASTStatement = 
   | ReturnStat of ASTExpression
   | IfStat of ASTExpression * ASTStatement list
   | Execution of ASTExpression 
   | Declaration of ASTVariable
-  | Assignment of string * ASTExpression
+  | Assignment of ASTVariable * ASTExpression
  
 type ASTSignature = {
   access : Access
   isStatic : bool
   returnTy : Ty
   name : string
-  args : (Ty * string) list
+  args : ASTVariable list
 }
 
 type ASTFunction = {
@@ -61,7 +63,7 @@ let convertSignature (s: FuncSignature) = {
     isStatic = s.isStatic
     returnTy = parseTy s.returnTy
     name = s.name
-    args = List.map (fun (a,b) -> (parseTy a,b)) s.args }
+    args = List.map (fun (a,b) -> Var (parseTy a,b)) s.args }
 
 let hardCodedFunctions = [
   FuncRef(IntTy, "Add", [IntTy; IntTy]); 
@@ -109,7 +111,7 @@ let rec convertStatement (sgn: ASTSignature) = function
       let! e' =  convertExpr' e <!> getState 
       let! found = findVariable s <!> getState 
       return match (found, e') with
-             | Some (Var (t1,_)), (t2,_) when t1 = t2 ->  (s,e') |> Assignment
+             | Some ((Var (t1, _)) as v), (t2,_) when t1 = t2 ->  (v,e') |> Assignment
              | Some (Var (t1,_)), (t2,_) -> failf "variable %s has type %A, but expected %A" s t1 t2
              | None, _ -> failf "variable %s is not in scope" s }
             
@@ -123,10 +125,10 @@ let rec convertStatement (sgn: ASTSignature) = function
 
 let convertFunction ({signature = sgn; body = body }:ParserFunction) : ASTFunction =
   let sgn' = convertSignature sgn
-  let thisFunc = FuncRef (sgn'.returnTy, sgn'.name, List.map fst sgn'.args) //For recursion
+//  let thisFunc = FuncRef (sgn'.returnTy, sgn'.name, List.map fst sgn'.args) //For recursion
   let scopeInit = {
-    variables = List.map Var sgn'.args 
-    functions = thisFunc :: hardCodedFunctions
+    variables = sgn'.args 
+    functions = hardCodedFunctions//thisFunc :: hardCodedFunctions
   }
   let body' = mapM (convertStatement sgn') body |> flip eval scopeInit 
   {signature = sgn'; body =body'}

@@ -12,6 +12,7 @@
     <compile Include="CoreTypes.fs"/>
     <compile Include="Parser.fs"/>
     <compile Include="ASTBuilder.fs"/>
+    <Compile Include="ComputationGraph.fs"/>
     <Compile Include="VariableAssignment.fs"/>
     <Compile Include="Tests.fs"/>
     <Compile Include="Program.fs"/>
@@ -28,5 +29,6 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.*"/>
     <PackageReference Include="System.Runtime.InteropServices.RuntimeInformation" Version="4.3.0"/>
     <PackageReference Include="Unquote" Version="3.2.0"/>
+    <PackageReference Include="Hekate" Version="3.2.1"/>
   </ItemGroup>
 </Project>

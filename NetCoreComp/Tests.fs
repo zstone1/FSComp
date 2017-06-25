@@ -122,7 +122,7 @@ module ASTBuilderTests =
                            };
        body =  [
                  Declaration (Var (IntTy,"x")); 
-                 Assignment ("x",(IntTy, IntLit 2));
+                 Assignment (Var (IntTy,"x"),(IntTy, IntLit 2));
                  IfStat ((IntTy, Variable "x"),[ReturnStat (IntTy, IntLit 1)]);
                  ReturnStat (IntTy, IntLit 0) 
                ]
@@ -149,10 +149,10 @@ module ASTBuilderTests =
                  IfStat((IntTy, (IntLit 1)), 
                    [
                      Declaration (Var (IntTy, "y"));
-                     Assignment ("y", (IntTy, IntLit 3))
+                     Assignment ((Var (IntTy,"y")), (IntTy, IntLit 3))
                    ]);
                  Declaration (Var (IntTy, "y"));
-                 Assignment ("y", (IntTy, IntLit 4));
+                 Assignment (Var (IntTy, "y"), (IntTy, IntLit 4));
                  ReturnStat (IntTy, Variable "y");
               ]
      }] = (prgm |> parseProgram |> convertModule ) @>
