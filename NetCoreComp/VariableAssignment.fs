@@ -42,7 +42,6 @@ type Location =
   | RedZone of int
   | Imm of int
 
-
 type AssignedVar<'T> = AVar of 'T * Location
 
 let getLocation (AVar (_,l)) = l
@@ -52,6 +51,14 @@ type VarState = {
   functions : ASTFuncRef list
   redZone : int
 }
+ 
+type AssignedStatement = 
+  | AReturnStat of ASTExpression * VarState
+  | AExecution of ASTExpression * VarState
+  | ADeclaration of ASTVariable * VarState
+  | AAssignment of ASTVariable * ASTExpression * VarState
+  | AIfStat of (ASTExpression * VarState) * AssignedStatement list
+
 let getVariables s = s.variables
 
 let setVars f st : VarState = {st with variables = f st.variables}
@@ -103,10 +110,19 @@ let rec getExprLocation = function
   | Func _ -> failf "Only add and sub are supported right now" 
   | StringLit _ -> failf "I'll deal with string constants later"
 
-let assignStatement = function
-  | ReturnStat _ | Assignment _ | Execution _ | IfStat _ 
-    as stmt -> stmt |> returnM
-  | Declaration v as stmt-> addLocal v >>. returnM stmt
+let rec assignStatement s = state {
+  let! vars = getState
+  match s with 
+  | ReturnStat e -> return AReturnStat (e,vars)
+  | Assignment (x,y) -> return AAssignment (x,y,vars)
+  | Execution e -> return AExecution (e, vars) 
+  //note, I add the local variable, but use the old state, "vars".
+  //variable declarations should not beable to reference themselves
+  | Declaration v -> do! addLocal v
+                     return (ADeclaration (v,vars))
+  | IfStat (e,xs) -> let! body = mapM assignStatement xs
+                     return AIfStat ((e,vars), body)
+}
 
 let assignStatement' s = state {
   let! state = getState
@@ -114,11 +130,12 @@ let assignStatement' s = state {
   return (expr, state)
 }
 
-let convertFunc f =
+let assignFunc f =
   let initial = initScope f.signature.args
   let assigned = mapM assignStatement' f.body 
   eval assigned initial
 
+let assignModule fs = List.map assignFunc fs
  
 
 

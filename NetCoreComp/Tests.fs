@@ -157,7 +157,25 @@ module ASTBuilderTests =
               ]
      }] = (prgm |> parseProgram |> convertModule ) @>
   
-
+module VariableAssignmentTests = 
+  open ASTBuilder
+  open VariableAssignment
+  [<Test>]
+  let ``literally anything``() = 
+    let prgm = @" public int main(){
+        if(1)
+        {
+          int y;
+          y = 3;
+        };
+        int y;
+        y = 4;
+        return y;
+    }"
+    test <@ 
+            let p = (prgm |> parseProgram |> convertModule |> assignModule)
+            (sprintf "%A" p) = "a"
+    @>
 
 
 
