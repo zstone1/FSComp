@@ -9,9 +9,9 @@ type Expression =
  | Variable of string
  | Func of string * (Expression list)
 
-type Statement = 
+type PStatement = 
  | ReturnStat of Expression
- | IfStat of Expression * Statement list
+ | IfStat of Expression * PStatement list
  | Execution of Expression
  | Declaration of string * string
  | Assignment of string * Expression
@@ -26,7 +26,7 @@ type FuncSignature = {
 
 type ParserFunction = {
   signature : FuncSignature
-  body : Statement list
+  body : PStatement list
 }
  
 type ParserData = unit

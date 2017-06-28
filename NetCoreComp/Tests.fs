@@ -97,7 +97,7 @@ module parserTests =
                }  
              body = [ReturnStat (IntLit 5)] 
     } = funcCompare rtn5 @>
-  
+ (* 
 module ASTBuilderTests =
   open ASTBuilder
   open System
@@ -178,6 +178,6 @@ module VariableAssignmentTests =
     @>
 
 
-
+*)
  
  

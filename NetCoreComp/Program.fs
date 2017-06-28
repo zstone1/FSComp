@@ -16,10 +16,15 @@ let main argv =
         };
         int y;
         y = 4;
-        return y;
+        int z;
+        z = Add(y,y);
+        return z;
     }"
-    let p = (prgm |> parseProgram |> convertModule |> assignModule)
-    printf "%A" p
+//    let proc = System.Diagnostics.Process.Start("foo")
+//    let p = proc.WaitForExit()
+//    let rtn = proc.ExitCode
+    let p = (prgm |> parseProgram |> convertModule |> fst |> assignModule)
+    printfn "%A" p
     1
 
 (*

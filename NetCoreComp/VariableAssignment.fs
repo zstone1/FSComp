@@ -31,15 +31,12 @@ type Scale = Register * ScaleFactors
 type Memory =
   | ByNum of int
   | ByReg of Register
-  | ByReg_Scale of Register * Scale
   | ByReg_Num of Register * int
-  | ByReg_Scale_Num of Register * Scale * int
 
 type Location =
   | Reg of Register 
 //  | Mem of Memory 
-//  | OnStack of int 
-  | RedZone of int
+  | OnStack of int 
   | Imm of int
 
 type AssignedVar<'T> = AVar of 'T * Location
@@ -49,15 +46,15 @@ let getLocation (AVar (_,l)) = l
 type VarState = { 
   variables : Map<string,AssignedVar<ASTVariable>>
   functions : ASTFuncRef list
-  redZone : int
+  stackDepth : int
 }
  
 type AssignedStatement = 
-  | AReturnStat of ASTExpression * VarState
-  | AExecution of ASTExpression * VarState
-  | ADeclaration of ASTVariable * VarState
-  | AAssignment of ASTVariable * ASTExpression * VarState
-  | AIfStat of (ASTExpression * VarState) * AssignedStatement list
+  | AReturnStat of ASTExpression
+  | AExecution of ASTExpression 
+  | ADeclaration of ASTVariable 
+  | AAssignment of ASTVariable * ASTExpression 
+  | AIfStat of ASTExpression * (AssignedStatement list)
 
 let getVariables s = s.variables
 
@@ -65,9 +62,9 @@ let setVars f st : VarState = {st with variables = f st.variables}
 
 type VarStateM<'t> = State<'t,VarState>
 
-let incrRedZone = state {
-  let incr s = {s with redZone = s.redZone + 8}
-  let! {redZone = r} = updateState incr
+let incrStackDepth = state {
+  let incr s = {s with stackDepth = s.stackDepth + 8}
+  let! {stackDepth = r} = updateState incr
   return r
 }
 
@@ -79,8 +76,8 @@ let addVariable var l = state {
 }
 
 let addLocal var = state {
-  let! offset = incrRedZone
-  do! addVariable var (RedZone offset)
+  let! offset = incrStackDepth
+  do! addVariable var (OnStack offset)
 }
 
 let getVar n = getState 
@@ -98,7 +95,7 @@ let initScope (a:ASTVariable list) =
           |> Seq.map (fun i -> (i |> fst |> name, AVar i))
   {
     functions = []
-    redZone = 0
+    stackDepth = 0
     variables = Map.ofSeq vars
   }
 
@@ -110,30 +107,19 @@ let rec getExprLocation = function
   | Func _ -> failf "Only add and sub are supported right now" 
   | StringLit _ -> failf "I'll deal with string constants later"
 
-let rec assignStatement s = state {
-  let! vars = getState
-  match s with 
-  | ReturnStat e -> return AReturnStat (e,vars)
-  | Assignment (x,y) -> return AAssignment (x,y,vars)
-  | Execution e -> return AExecution (e, vars) 
-  //note, I add the local variable, but use the old state, "vars".
-  //variable declarations should not beable to reference themselves
-  | Declaration v -> do! addLocal v
-                     return (ADeclaration (v,vars))
-  | IfStat (e,xs) -> let! body = mapM assignStatement xs
-                     return AIfStat ((e,vars), body)
-}
-
-let assignStatement' s = state {
-  let! state = getState
-  let! expr = assignStatement s
-  return (expr, state)
-}
+let rec assignStatement =  function
+  | ReturnStat e -> AReturnStat e |>returnM
+  | Assignment (x,y) -> AAssignment (x,y) |> returnM
+  | Execution e ->  AExecution e |> returnM
+  | Declaration v -> addLocal v 
+                 >>. returnM (ADeclaration v)
+  | IfStat (e,xs) -> mapM assignStatement xs 
+                 |>> fun b -> AIfStat (e, b)
 
 let assignFunc f =
   let initial = initScope f.signature.args
-  let assigned = mapM assignStatement' f.body 
-  eval assigned initial
+  let assigned = mapM assignStatement f.body 
+  run assigned initial
 
 let assignModule fs = List.map assignFunc fs
  

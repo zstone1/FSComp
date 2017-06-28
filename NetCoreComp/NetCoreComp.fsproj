@@ -12,8 +12,8 @@
     <compile Include="CoreTypes.fs"/>
     <compile Include="Parser.fs"/>
     <compile Include="ASTBuilder.fs"/>
-    <Compile Include="ComputationGraph.fs"/>
     <Compile Include="VariableAssignment.fs"/>
+    <Compile Include="Assembly.fs"/>
     <Compile Include="Tests.fs"/>
     <Compile Include="Program.fs"/>
   </ItemGroup>

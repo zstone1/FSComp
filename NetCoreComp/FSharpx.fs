@@ -132,6 +132,7 @@ module State =
     let putState s = State (fun _ -> ((),s))
     let eval (State m) s = m s |> fst
     let exec (State m) s = m s |> snd
+    let run (State m) s = m s 
     let empty = State (fun s -> ((), s))
     let bind (k: 'a -> State<'b,'c>) (State m) = State (fun s -> 
       let (a, s') = m s 

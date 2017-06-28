@@ -7,25 +7,32 @@ open FSharpx
 type Ty = IntTy | StringTy
 type Access = Public | Private
 
-type ASTVariable = Var of Ty * string
-type ASTFuncRef = FuncRef of Ty * string * Ty list
-
-type Scope<'V,'F> = {
-  variables : 'V list
-  functions : 'F list
+type ASTVariable = {
+  ty : Ty
+  originalName : string
+  name : string
 }
 
-type private Scoped<'T> = State<'T,Scope<ASTVariable, ASTFuncRef>>
+type ASTFuncRef = FuncRef of Ty * string * Ty list
+
+type Scope = {
+  uniqueNum : int
+  variableCount : int
+  variables : ASTVariable list
+  functions : ASTFuncRef list
+}
+
+type private Scoped<'T> = State<'T,Scope>
 let scope = state
 
-let findVariable' v vars = List.tryFind (fun (Var (_,n)) -> n = v) vars
-let findVariable v scope = findVariable' v scope.variables
+let findVariableByOriginal vorigninal scope = List.tryFind (fun {originalName = n} -> n = vorigninal) scope.variables
+
 let findFunction' name args funcs = List.tryFind (fun (FuncRef(_,n,l)) -> n = name && args = l) funcs
 let findFunction name args scope = findFunction' name args scope.functions
 
 type ASTExpression = Ty * Expression
 
-let name (Var (_,n)) = n
+let name ({name = n}:ASTVariable) = n
  
 type ASTStatement = 
   | ReturnStat of ASTExpression
@@ -45,6 +52,7 @@ type ASTSignature = {
 type ASTFunction = {
   signature : ASTSignature
   body : ASTStatement list
+  locals : int
 }
 
 let parseAccess = function
@@ -57,32 +65,39 @@ let parseTy = function
   | "string" -> StringTy
   | x -> failf "fail to parse type %s" x
   
+let uniqify originalName = scope {
+  let! s = getState
+  do! putState {s with uniqueNum = s.uniqueNum + 1; variableCount = s.variableCount + 1}
+  return sprintf "%s_%i" originalName s.uniqueNum
+}
 
-let convertSignature (s: FuncSignature) = { 
-    access = parseAccess s.access 
-    isStatic = s.isStatic
-    returnTy = parseTy s.returnTy
-    name = s.name
-    args = List.map (fun (a,b) -> Var (parseTy a,b)) s.args }
+let argConverter orig t = scope {
+  let! newName = uniqify orig
+  return { ty = parseTy t; originalName = orig; name = newName }
+}
+ 
+let convertSignature (s: FuncSignature) = scope {
+  let! args = mapM (uncurry argConverter) s.args
+  return { 
+   access = parseAccess s.access 
+   isStatic = s.isStatic
+   returnTy = parseTy s.returnTy
+   name = s.name
+   args = args }
+}
 
 let hardCodedFunctions = [
   FuncRef(IntTy, "Add", [IntTy; IntTy]); 
   FuncRef(IntTy, "Sub", [IntTy; IntTy])]
 
-let introduceVariable ty name = scope {
-    let decl =  (parseTy ty, name) |> Var
-    let updater st = {st with variables = decl :: st.variables}
-    do! updateState updater |>> ignore
-    return decl |> Declaration }
- 
+
 let rec convertExpr scope = function
   | IntLit _ as x -> (IntTy, x)
   | StringLit _ as x -> (StringTy, x)
-  | Variable v as x -> 
-       v
-    |> flip findVariable scope 
-    |> function | Some (Var (t,_)) -> (t,x)
-                | None  -> failf "variable %s is not in scope" v
+  | Variable original as x -> 
+    findVariableByOriginal original scope 
+    |> function | Some {name = n; ty = t} -> (t, Variable n)
+                | None  -> failf "variable %s is not in scope" original
   | Func (v,args) as x -> 
        args 
     |> List.map (convertExpr scope >> fst)
@@ -91,6 +106,13 @@ let rec convertExpr scope = function
                 | None -> failf "function %A is not in scope" x
 
 let rec convertExpr' = flip convertExpr
+
+let introduceVariable ty name = scope {
+   let! newName = uniqify name
+   let decl = {ty = parseTy ty; originalName = name; name = newName}
+   let updater st = {st with variables = decl :: st.variables}
+   do! updateState updater |>> ignore
+   return decl |> Declaration }
    
 let rec convertStatement (sgn: ASTSignature) = function
   | Parser.ReturnStat r -> 
@@ -99,41 +121,56 @@ let rec convertStatement (sgn: ASTSignature) = function
     |>> function | (ty,x) when ty = sgn.returnTy -> (ty,x) |> ReturnStat
                  | _ -> failf "return %A didn't match expected %A" r sgn.returnTy
   
-  | Parser.Declaration (t,s) -> 
-        getState 
-    |>> findVariable s 
-    >>= function | None -> introduceVariable t s
-                 | Some _ -> failf "variable %s is already in scope" s
+  | Parser.Declaration (t,o) -> scope {
+      let! s = getState
+      let var = findVariableByOriginal o s
+      match var with 
+      | None -> return! introduceVariable t o
+      | Some _ -> return failf "variable %s is already in scope" o }
               
   | Parser.Execution e -> getState |>> (convertExpr' e >> Execution)
   
-  | Parser.Assignment (s,e) ->  scope {
+  | Parser.Assignment (o,e) ->  scope {
       let! e' =  convertExpr' e <!> getState 
-      let! found = findVariable s <!> getState 
+      let! found = findVariableByOriginal o <!> getState 
       return match (found, e') with
-             | Some ((Var (t1, _)) as v), (t2,_) when t1 = t2 ->  (v,e') |> Assignment
-             | Some (Var (t1,_)), (t2,_) -> failf "variable %s has type %A, but expected %A" s t1 t2
-             | None, _ -> failf "variable %s is not in scope" s }
+             | Some {ty = t1}, (t2,_) when t1 <> t2 -> failf "variable %s has type %A, but expected %A" o t1 t2 
+             | None, _ -> failf "variable %s is not in scope" o 
+             | (Some v), x -> (v,x) |> Assignment}
             
   //I need to ensure the scope is restored after popping out of the body
   | Parser.IfStat (e,stats) -> scope {
       let! guard = convertExpr' e <!> getState 
       let! before = getState 
       let! body =  mapM (convertStatement sgn) stats
-      do! putState before
+      let! after = getState
+      do! putState {after with variables = before.variables}
       return IfStat (guard, body) }
 
-let convertFunction ({signature = sgn; body = body }:ParserFunction) : ASTFunction =
-  let sgn' = convertSignature sgn
-//  let thisFunc = FuncRef (sgn'.returnTy, sgn'.name, List.map fst sgn'.args) //For recursion
+let convertFunction ({signature = sgn; body = body }:ParserFunction) = scope {
+  let! sgn' = convertSignature sgn
+  let! uniqueNum = (fun i -> i.uniqueNum) <!> getState
   let scopeInit = {
+    uniqueNum = uniqueNum
+    variableCount = 0
     variables = sgn'.args 
-    functions = hardCodedFunctions//thisFunc :: hardCodedFunctions
+    functions = hardCodedFunctions
   }
-  let body' = mapM (convertStatement sgn') body |> flip eval scopeInit 
-  {signature = sgn'; body =body'}
+  do! putState scopeInit
+  let! body' = mapM (convertStatement sgn') body
+  let! s = getState
+  return {signature = sgn'; body = body'; locals = s.variableCount}
+}
 
-let public convertModule = List.map convertFunction
+let public convertModule fs= 
+  let scopeInit = {
+    uniqueNum = 0
+    variableCount = 0
+    variables = []
+    functions = hardCodedFunctions
+  }
+  run (mapM convertFunction fs) scopeInit
+
 
 
  
