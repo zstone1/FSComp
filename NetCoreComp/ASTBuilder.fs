@@ -36,7 +36,7 @@ let name ({name = n}:ASTVariable) = n
  
 type ASTStatement = 
   | ReturnStat of ASTExpression
-  | IfStat of ASTExpression * ASTStatement list
+  | IfStat of string * ASTExpression * ASTStatement list
   | Execution of ASTExpression 
   | Declaration of ASTVariable
   | Assignment of ASTVariable * ASTExpression
@@ -145,7 +145,8 @@ let rec convertStatement (sgn: ASTSignature) = function
       let! body =  mapM (convertStatement sgn) stats
       let! after = getState
       do! putState {after with variables = before.variables}
-      return IfStat (guard, body) }
+      let name = sprintf "label_%i" after.uniqueNum
+      return IfStat (name, guard, body) }
 
 let convertFunction ({signature = sgn; body = body }:ParserFunction) = scope {
   let! sgn' = convertSignature sgn

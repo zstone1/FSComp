@@ -54,7 +54,7 @@ type AssignedStatement =
   | AExecution of ASTExpression 
   | ADeclaration of ASTVariable 
   | AAssignment of ASTVariable * ASTExpression 
-  | AIfStat of ASTExpression * (AssignedStatement list)
+  | AIfStat of string * ASTExpression * (AssignedStatement list)
 
 let getVariables s = s.variables
 
@@ -80,11 +80,12 @@ let addLocal var = state {
   do! addVariable var (OnStack offset)
 }
 
-let getVar n = getState 
-           |>> getVariables
-           |>> Map.tryFind n
-           |>> function | Some x -> x
-                        | None -> failf "failed to find variable %s in var state, which is bad" n
+let getVar n s = 
+  s
+  |> getVariables
+  |> Map.tryFind n
+  |> function | Some x -> x
+              | None -> failf "failed to find variable %s in var state, which is bad" n
 
 let callingConvention = List.map Reg [RDI;RSI;RDX;RCX;R8;R9] 
   
@@ -98,23 +99,14 @@ let initScope (a:ASTVariable list) =
     stackDepth = 0
     variables = Map.ofSeq vars
   }
-
-let rec getExprLocation = function 
-  | IntLit i -> Imm i |> returnM
-  | Variable v -> getVar v |>> getLocation
-  | Func ("Add",[_;_]) | Func ("Sub",[_;_]) -> Reg RAX |> returnM
-
-  | Func _ -> failf "Only add and sub are supported right now" 
-  | StringLit _ -> failf "I'll deal with string constants later"
-
 let rec assignStatement =  function
   | ReturnStat e -> AReturnStat e |>returnM
   | Assignment (x,y) -> AAssignment (x,y) |> returnM
   | Execution e ->  AExecution e |> returnM
   | Declaration v -> addLocal v 
                  >>. returnM (ADeclaration v)
-  | IfStat (e,xs) -> mapM assignStatement xs 
-                 |>> fun b -> AIfStat (e, b)
+  | IfStat (n,e,xs) -> mapM assignStatement xs 
+                   |>> fun b -> AIfStat (n, e, b)
 
 let assignFunc f =
   let initial = initScope f.signature.args
