@@ -22,16 +22,22 @@ let main argv =
         y = 5;
         int z;
         z = Add(y,y);
+        z = Add(z,y);
         return z;
     }"
-//    let proc = System.Diagnostics.Process.Start("foo")
-//    let p = proc.WaitForExit()
-//    let rtn = proc.ExitCode
     let p = (prgm |> parseProgram |> convertModule |> fst |> assignModule |> serializeModule)
-    printfn "%A" p
+    do System.IO.File.WriteAllText("FSTests/test1.asm", p)
+    use assemble = System.Diagnostics.Process.Start("nasm", "-felf64 \"FSTests/test1.asm\" -o \"FSTests/Foo.o\"")
+    do assemble.WaitForExit()
+    use link = System.Diagnostics.Process.Start("ld", "FSTests/Foo.o -o FSTests/Foo.out ")
+    do link.WaitForExit()
+    use proc = System.Diagnostics.Process.Start("./FSTests/Foo.out")
+    do proc.WaitForExit()
+    let rtn = proc.ExitCode
+    do printfn "Return code %i" rtn
     1
   with 
-  | exn -> printf "%A" exn; 1
+  | exn -> printfn "%A" exn; 1
 (*
     try
         let prgm = @" public int main(){
