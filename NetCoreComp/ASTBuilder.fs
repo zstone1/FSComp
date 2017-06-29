@@ -96,14 +96,13 @@ let rec convertExpr scope = function
   | StringLit _ as x -> (StringTy, x)
   | Variable original as x -> 
     findVariableByOriginal original scope 
-    |> function | Some {name = n; ty = t} -> (t, Variable n)
+    |> function | Some {name = n; ty = t} -> printfn "Creating variable %A" (t, Variable n); (t, Variable n)
                 | None  -> failf "variable %s is not in scope" original
   | Func (v,args) as x -> 
-       args 
-    |> List.map (convertExpr scope >> fst)
-    |> flip3' findFunction v scope 
-    |> function | Some (FuncRef (ty,_,_)) -> (ty, x)
-                | None -> failf "function %A is not in scope" x
+    let newArgs = args |> List.map (convertExpr scope)
+    match findFunction v (List.map fst newArgs) scope with 
+    | Some (FuncRef (ty,_,_)) -> (ty, (Func(v, List.map snd newArgs)))
+    | None -> failf "function %A is not in scope" x
 
 let rec convertExpr' = flip convertExpr
 
