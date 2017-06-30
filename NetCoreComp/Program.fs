@@ -25,7 +25,8 @@ let main argv =
         z = Add(z,y);
         return z;
     }"
-    let p = (prgm |> parseProgram |> convertModule |> fst |> assignModule |> serializeModule)
+//    let p = (prgm |> parseProgram |> convertModule |> fst |> assignModule |> serializeModule)
+    let p = ""
     do System.IO.File.WriteAllText("FSTestTemp/test1.asm", p)
     use assemble = System.Diagnostics.Process.Start("nasm", "-felf64 \"FSTestTemp/test1.asm\" -o \"FSTestTemp/Foo.o\"")
     do assemble.WaitForExit()

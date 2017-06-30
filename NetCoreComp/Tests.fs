@@ -97,87 +97,102 @@ module parserTests =
                }  
              body = [ReturnStat (IntLit 5)] 
     } = funcCompare rtn5 @>
- (* 
-module ASTBuilderTests =
-  open ASTBuilder
-  open System
- 
-  [<Test>]
-  let ``build simple AST``() = 
-    let prgm =  @"public int main(){
-        int x;
-        x = 2;
-        if(x)
-        {
-            return 1;
-        };
-        return 0;
-    }"
-    test <@ [{ signature = {
-                             access = Public;
-                             isStatic = false;
-                             returnTy = IntTy;
-                             name = "main";
-                             args = [];
-                           };
-       body =  [
-                 Declaration (Var (IntTy,"x")); 
-                 Assignment (Var (IntTy,"x"),(IntTy, IntLit 2));
-                 IfStat ((IntTy, Variable "x"),[ReturnStat (IntTy, IntLit 1)]);
-                 ReturnStat (IntTy, IntLit 0) 
-               ]
-     }] = (prgm |> parseProgram |> convertModule) @>
-    
-  [<Test>]
-  let ``if scoping`` () = 
-    let prgm = @" public int main(){
-        if(1)
-        {
-          int y;
-          y = 3;
-        };
-        int y;
-        y = 4;
-        return y;
-    }"
-    test <@[{ signature = {access = Public;
-                   isStatic = false;
-                   returnTy = IntTy;
-                   name = "main";
-                   args = [];};
-       body = [
-                 IfStat((IntTy, (IntLit 1)), 
-                   [
-                     Declaration (Var (IntTy, "y"));
-                     Assignment ((Var (IntTy,"y")), (IntTy, IntLit 3))
-                   ]);
-                 Declaration (Var (IntTy, "y"));
-                 Assignment (Var (IntTy, "y"), (IntTy, IntLit 4));
-                 ReturnStat (IntTy, Variable "y");
-              ]
-     }] = (prgm |> parseProgram |> convertModule ) @>
-  
-module VariableAssignmentTests = 
-  open ASTBuilder
+    (*
+module endToEnd =  
+  open FParsec
+  open Parser
+  open NUnit.Framework
   open VariableAssignment
+  open Assembly
+  open ASTBuilder
+  open Swensen.Unquote
+ 
+  let testOutputDir = "/home/zach/cmp/TestOutput"
+  let runProc f args = 
+    let proc = new System.Diagnostics.Process()
+    proc.StartInfo.FileName <- f
+    proc.StartInfo.Arguments <- args
+    proc.StartInfo.UseShellExecute <- true
+    proc.StartInfo.WorkingDirectory <- "/home/zach/cmp/TestOutput"
+    do proc.Start() |> ignore
+    do proc.WaitForExit()
+    proc
+
+  let mutable i =  0
+  let execute prgm = 
+    let p = (prgm |> parseProgram |> convertModule |> fst |> assignModule |> serializeModule)
+    do System.IO.File.WriteAllText(testOutputDir + "/test1.asm", p)
+    use assemble = runProc "nasm" " -felf64 \"test1.asm\" -o \"Foo.o\""
+    use link = runProc "ld" "Foo.o -o Foo.out "
+    use proc = runProc "./Foo.out" ""
+    proc.ExitCode
+
   [<Test>]
-  let ``literally anything``() = 
-    let prgm = @" public int main(){
-        if(1)
-        {
-          int y;
-          y = 3;
-        };
-        int y;
-        y = 4;
-        return y;
-    }"
-    test <@ 
-            let p = (prgm |> parseProgram |> convertModule |> assignModule)
-            (sprintf "%A" p) = "a"
-    @>
-
-
+  let ``simple adding`` () = 
+    Assert.AreEqual(15,@"public int main(){
+           int y;
+           y = 5;
+           int z;
+           z = Add(y,y);
+           z = Add(z,y);
+           return z;
+       }" |> execute)
+  //[<Test>]
+  let ``simple if`` () = 
+   Assert.AreEqual(2,@"public int main(){
+          int x;
+          x = 1;
+          if(x)
+          {
+            return 1;
+          };
+          return 2;
+     }" |> execute)
+  //[<Test>]
+  let ``simple if skip`` () = 
+    Assert.AreEqual(1,@"public int main(){
+          int x;
+          x = 0;
+          if(x)
+          {
+            return 1;
+          };
+          return 2;
+     }" |> execute)
+  //[<Test>]
+  let ``Add a lot`` () = 
+    Assert.AreEqual(40,@"public int main(){
+         int x;
+         x = 0;
+         x = Add(x,2);
+         x = Add(x,2);
+         x = Add(x,2);
+         x = Add(x,2);
+         x = Add(x,2);
+         x = Add(x,2);
+         x = Add(x,2);
+         x = Add(x,2);
+         x = Add(x,2);
+         x = Add(x,2);
+         x = Add(x,2);
+         x = Add(x,2);
+         x = Add(x,2);
+         x = Add(x,2);
+         x = Add(x,2);
+         x = Add(x,2);
+         x = Add(x,2);
+         x = Add(x,2);
+         x = Add(x,2);
+         x = Add(x,2);
+         return x;
+    }" |> execute) 
+  //[<Test>]
+  let ``NestedAdd`` () = 
+    Assert.AreEqual(18,@"public int main(){
+         int x;
+         x = Add(2,Add(2,Add(2,Add(2,Add(2,Add(2,Add(2,Add(2,2))))))));
+         return x;
+    }" |> execute) 
 *)
  
  

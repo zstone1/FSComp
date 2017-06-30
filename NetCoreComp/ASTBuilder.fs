@@ -13,11 +13,14 @@ type ASTVariable = {
   name : string
 }
 
-type ASTFuncRef = FuncRef of Ty * string * Ty list
+type ASTFuncRef = {
+  ty : Ty
+  name : string
+  argTys : Ty list
+}
 
 type Scope = {
   uniqueNum : int
-  variableCount : int
   variables : ASTVariable list
   functions : ASTFuncRef list
 }
@@ -27,10 +30,18 @@ let scope = state
 
 let findVariableByOriginal vorigninal scope = List.tryFind (fun {originalName = n} -> n = vorigninal) scope.variables
 
-let findFunction' name args funcs = List.tryFind (fun (FuncRef(_,n,l)) -> n = name && args = l) funcs
+let findFunction' name args funcs = List.tryFind (fun (ref) -> ref.name = name && args = ref.argTys) funcs
 let findFunction name args scope = findFunction' name args scope.functions
 
-type ASTExpression = Ty * Expression
+type ASTExpression =
+ | ASTLit of int
+ | ASTVar of ASTVariable
+ | ASTFunc of ASTFuncRef * (ASTExpression list)
+
+let getType = function
+  | ASTLit _ -> IntTy
+  | ASTVar {ty = t} -> t
+  | ASTFunc (t,_) -> t.ty
 
 let name ({name = n}:ASTVariable) = n
  
@@ -52,7 +63,6 @@ type ASTSignature = {
 type ASTFunction = {
   signature : ASTSignature
   body : ASTStatement list
-  locals : int
 }
 
 let parseAccess = function
@@ -67,7 +77,7 @@ let parseTy = function
   
 let uniqify originalName = scope {
   let! s = getState
-  do! putState {s with uniqueNum = s.uniqueNum + 1; variableCount = s.variableCount + 1}
+  do! putState {s with uniqueNum = s.uniqueNum + 1}
   return sprintf "%s_%i" originalName s.uniqueNum
 }
 
@@ -75,7 +85,7 @@ let argConverter orig t = scope {
   let! newName = uniqify orig
   return { ty = parseTy t; originalName = orig; name = newName }
 }
- 
+
 let convertSignature (s: FuncSignature) = scope {
   let! args = mapM (uncurry argConverter) s.args
   return { 
@@ -87,21 +97,21 @@ let convertSignature (s: FuncSignature) = scope {
 }
 
 let hardCodedFunctions = [
-  FuncRef(IntTy, "Add", [IntTy; IntTy]); 
-  FuncRef(IntTy, "Sub", [IntTy; IntTy])]
-
+  {ty = IntTy; name = "Add"; argTys = [IntTy; IntTy]};
+  {ty = IntTy; name = "Sub"; argTys = [IntTy; IntTy]};
+]
 
 let rec convertExpr scope = function
-  | IntLit _ as x -> (IntTy, x)
-  | StringLit _ as x -> (StringTy, x)
+  | IntLit x -> ASTLit x
+  | StringLit _ as x -> failf "strings not supported yet"
   | Variable original as x -> 
     findVariableByOriginal original scope 
-    |> function | Some {name = n; ty = t} -> printfn "Creating variable %A" (t, Variable n); (t, Variable n)
+    |> function | Some v -> ASTVar v
                 | None  -> failf "variable %s is not in scope" original
   | Func (v,args) as x -> 
     let newArgs = args |> List.map (convertExpr scope)
-    match findFunction v (List.map fst newArgs) scope with 
-    | Some (FuncRef (ty,_,_)) -> (ty, (Func(v, List.map snd newArgs)))
+    match findFunction v (List.map getType newArgs) scope with 
+    | Some t -> ASTFunc (t, newArgs)
     | None -> failf "function %A is not in scope" x
 
 let rec convertExpr' = flip convertExpr
@@ -117,7 +127,7 @@ let rec convertStatement (sgn: ASTSignature) = function
   | Parser.ReturnStat r -> 
         getState 
     |>> convertExpr' r 
-    |>> function | (ty,x) when ty = sgn.returnTy -> (ty,x) |> ReturnStat
+    |>> function | e when (e |> getType) = sgn.returnTy -> e |> ReturnStat
                  | _ -> failf "return %A didn't match expected %A" r sgn.returnTy
   
   | Parser.Declaration (t,o) -> scope {
@@ -132,10 +142,10 @@ let rec convertStatement (sgn: ASTSignature) = function
   | Parser.Assignment (o,e) ->  scope {
       let! e' =  convertExpr' e <!> getState 
       let! found = findVariableByOriginal o <!> getState 
-      return match (found, e') with
-             | Some {ty = t1}, (t2,_) when t1 <> t2 -> failf "variable %s has type %A, but expected %A" o t1 t2 
-             | None, _ -> failf "variable %s is not in scope" o 
-             | (Some v), x -> (v,x) |> Assignment}
+      return match found with
+             | Some {ty = t1} when t1 <> (getType e') -> failf "variable %s has type %A, but expected %A" o t1 e'
+             | None -> failf "variable %s is not in scope" o 
+             | (Some v) -> (v,e') |> Assignment}
             
   //I need to ensure the scope is restored after popping out of the body
   | Parser.IfStat (e,stats) -> scope {
@@ -152,20 +162,18 @@ let convertFunction ({signature = sgn; body = body }:ParserFunction) = scope {
   let! uniqueNum = (fun i -> i.uniqueNum) <!> getState
   let scopeInit = {
     uniqueNum = uniqueNum
-    variableCount = 0
     variables = sgn'.args 
     functions = hardCodedFunctions
   }
   do! putState scopeInit
   let! body' = mapM (convertStatement sgn') body
   let! s = getState
-  return {signature = sgn'; body = body'; locals = s.variableCount}
+  return {signature = sgn'; body = body';}
 }
 
 let public convertModule fs= 
   let scopeInit = {
     uniqueNum = 0
-    variableCount = 0
     variables = []
     functions = hardCodedFunctions
   }
