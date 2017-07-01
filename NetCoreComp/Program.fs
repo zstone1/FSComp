@@ -5,6 +5,7 @@ open Parser
 open ASTBuilder
 open Flatten
 open Assembly
+open Assignment
 
 
 [<EntryPoint>]
@@ -12,8 +13,7 @@ let main argv =
   try
     let prgm = @" public int main(){
         int y;
-        y = Add(Add(Add(2,2),2),2);
-        y = Add(2,Add(2,Add(2,2)));
+        y = Add (2,2);
         return y;
     }"
     let p = prgm 
@@ -21,8 +21,8 @@ let main argv =
          |> convertModule
         ||> flattenModule
          |> fst
-         |> (List.collect (List.map (sprintf "%A")))
-         |> String.concat "\n"
+         |> assignModule
+         |> serializeModule
     printfn "%s" p
     1
   with 

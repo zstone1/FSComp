@@ -97,12 +97,13 @@ module parserTests =
                }  
              body = [ReturnStat (IntLit 5)] 
     } = funcCompare rtn5 @>
-    (*
+    
 module endToEnd =  
   open FParsec
   open Parser
   open NUnit.Framework
-  open VariableAssignment
+  open Assignment
+  open Flatten
   open Assembly
   open ASTBuilder
   open Swensen.Unquote
@@ -120,7 +121,13 @@ module endToEnd =
 
   let mutable i =  0
   let execute prgm = 
-    let p = (prgm |> parseProgram |> convertModule |> fst |> assignModule |> serializeModule)
+    let p = prgm 
+         |> parseProgram 
+         |> convertModule
+        ||> flattenModule
+         |> fst
+         |> assignModule
+         |> serializeModule
     do System.IO.File.WriteAllText(testOutputDir + "/test1.asm", p)
     use assemble = runProc "nasm" " -felf64 \"test1.asm\" -o \"Foo.o\""
     use link = runProc "ld" "Foo.o -o Foo.out "
@@ -128,16 +135,21 @@ module endToEnd =
     proc.ExitCode
 
   [<Test>]
-  let ``simple adding`` () = 
-    Assert.AreEqual(15,@"public int main(){
+  let simplest () = 
+    Assert.AreEqual(5,@"public int main(){
            int y;
            y = 5;
-           int z;
-           z = Add(y,y);
-           z = Add(z,y);
-           return z;
+           return y;
        }" |> execute)
-  //[<Test>]
+
+  [<Test>]
+  let ``simple adding`` () = 
+    Assert.AreEqual(4,@"public int main(){
+           int y;
+           y = Add(2,2);
+           return y;
+       }" |> execute)
+  [<Test>]
   let ``simple if`` () = 
    Assert.AreEqual(2,@"public int main(){
           int x;
@@ -148,7 +160,7 @@ module endToEnd =
           };
           return 2;
      }" |> execute)
-  //[<Test>]
+  [<Test>]
   let ``simple if skip`` () = 
     Assert.AreEqual(1,@"public int main(){
           int x;
@@ -159,7 +171,7 @@ module endToEnd =
           };
           return 2;
      }" |> execute)
-  //[<Test>]
+  [<Test>]
   let ``Add a lot`` () = 
     Assert.AreEqual(40,@"public int main(){
          int x;
@@ -186,13 +198,28 @@ module endToEnd =
          x = Add(x,2);
          return x;
     }" |> execute) 
-  //[<Test>]
+  [<Test>]
   let ``NestedAdd`` () = 
     Assert.AreEqual(18,@"public int main(){
          int x;
          x = Add(2,Add(2,Add(2,Add(2,Add(2,Add(2,Add(2,Add(2,2))))))));
          return x;
     }" |> execute) 
-*)
- 
+  [<Test>]
+  let ``NestedAddReverse`` () = 
+    Assert.AreEqual(10,@"public int main(){
+         int x;
+         x = Add(Add(Add(Add(2,2),2),2),2);
+         return x;
+    }" |> execute) 
+  [<Test>]
+  let ``add variables`` () = 
+    Assert.AreEqual(11,@"public int main(){
+         int x;
+         x = 3;
+         int y;
+         x = Add(x,x);
+         y = Add(x,5);
+         return y;
+    }" |> execute) 
  

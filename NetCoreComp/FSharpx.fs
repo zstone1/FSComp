@@ -186,8 +186,6 @@ module State =
     let inline ( *>) x y = lift2 (fun _ z -> z) x y
     /// Sequence actions, discarding the value of the second argument.
     let inline ( <*) x y = lift2 (fun z _ -> z) x y
-    /// Sequentially compose two state actions, discarding any value produced by the first
-    let inline (>>.) m f = bindM state m (fun _ -> f)
     /// Left-to-right Kleisli composition
     let inline (>=>) f g = fun x -> f x >>= g
     /// Right-to-left Kleisli composition
