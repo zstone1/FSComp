@@ -4,3 +4,4 @@ bin
 *.dll
 *.exe
 FSTestTemp
+TestOutput

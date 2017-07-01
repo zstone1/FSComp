@@ -1,12 +1,13 @@
 module Assembly
 open Parser
-open VariableAssignment
 open ASTBuilder
 open FSharp.Collections;
 open FSharpx
 open FSharpx.State
  
- (*
+
+
+(*
 type Instruction = 
   | Mov of Location * Location
   | Add of Location * Location

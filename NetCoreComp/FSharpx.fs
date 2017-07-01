@@ -18,7 +18,6 @@ module Prelude =
     /// Transforms a function by flipping the order of its arguments.
     let inline flip3 f a b c = f c a b
 
-    let inline flip3' f a b c = f a c b
     /// Transforms a function by flipping the order of its arguments.
     let inline flip4 f a b c d = f d a b c
     
