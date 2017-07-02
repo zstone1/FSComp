@@ -12,6 +12,11 @@ type CompilerState = {
   uniqueCounter : int 
 }
 
+[<Literal>]
+let PlusName = "_+"
+[<Literal>]
+let MinusName = "_-"
+
 type Comp<'t> = State<'t, CompilerState>
 
 let comp = StateBuilder()

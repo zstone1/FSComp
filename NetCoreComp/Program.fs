@@ -12,21 +12,20 @@ open Assignment
 let main argv =
   try
     let prgm = @" public int main(){
-        int y;
-        y = Add (2,2);
-        return y;
+        return 1 - 2 + 3;
     }"
+    do printfn "hello?"
     let p = prgm 
          |> parseProgram 
-         |> convertModule
-        ||> flattenModule
-         |> fst
-         |> assignModule
-         |> serializeModule
-    printfn "%s" p
+//         |> convertModule
+//        ||> flattenModule
+//         |> fst
+//         |> assignModule
+//         |> serializeModule
+    do printfn "the progam: %A" p
     1
   with 
-  | exn -> printfn "%A" exn; 1
+  | exn -> printfn "fail with: %A" exn; 1
 (*
     try
         let prgm = @" public int main(){

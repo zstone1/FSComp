@@ -38,6 +38,7 @@ let Add a1 a2 = AddI (a1,a2) |> addInstruct
 
 let Sub a1 a2 = SubI (a1,a2) |> addInstruct
 
+
 let makeNamePre prefix : State<string,InterSt> = state {
     let! s = getState 
     do! putState {s with uniqueNum = s.uniqueNum + 1}
@@ -56,9 +57,9 @@ let handleArith arith flatten a b = state {
 let rec flattenExpression = function
   | ASTLit i -> i |> IntLitAtom |> returnM
   | ASTVar v -> v.name |> VarName |> returnM
-  | ASTFunc ({name = "Add"; argTys = [IntTy;IntTy]}, [x;y]) ->
+  | ASTFunc ({name = PlusName; argTys = [IntTy;IntTy]}, [x;y]) ->
       handleArith Add flattenExpression x y
-  | ASTFunc ({name = "Sub"; argTys = [IntTy;IntTy]}, [x;y]) -> 
+  | ASTFunc ({name = MinusName; argTys = [IntTy;IntTy]}, [x;y]) -> 
       handleArith Sub flattenExpression x y
   | ASTFunc (_,_) -> failf "only add and sub are supported"
 //  | ASTFunc ({name = n},v) -> state {

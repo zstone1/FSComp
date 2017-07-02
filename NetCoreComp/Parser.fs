@@ -30,7 +30,8 @@ type ParserFunction = {
 }
  
 type ParserData = unit
- 
+
+
 let allowabeNameChar = letter
 let parseName = many1Chars letter .>> spaces
 let tok s = pstring s .>> spaces >>% ()
@@ -38,9 +39,15 @@ let tok2 s = spaces >>. tok s
 let betweenParens a = between (tok "(") (tok ")") a
 let betweenCurlys a = between (tok "{") (tok "}") a
 
-let parseExpression, parseExpressionRef = createParserForwardedToRef()
+let opp = OperatorPrecedenceParser<_,_,ParserData>()
+let parseExpression = opp.ExpressionParser;
 
-do parseExpressionRef := 
+let arithHelper s= InfixOperator(s, spaces, 1, Associativity.Left, fun x y -> Func ("_" + s,[x;y]))
+opp.AddOperator(arithHelper "-")
+opp.AddOperator(arithHelper "+")
+opp.AddOperator(arithHelper "*")
+
+let expr = 
    let parseInt = pint32 .>> spaces |>> IntLit
    let parseString = 
      let normal = satisfy (fun c -> c <>'\\' && c <> '"')
@@ -57,12 +64,15 @@ do parseExpressionRef :=
      let! name = parseName
      let! args = sepBy parseExpression (tok ",") |> betweenParens 
      return Func (name,args)}
+   let parsensExpr = betweenParens parseExpression
               
+   attempt parsensExpr   <|>
    attempt parseInt      <|> 
    attempt parseString   <|> 
    attempt parseFunc     <|> 
    attempt parseVariable <?> 
    "Failed to parse expression"
+opp.TermParser <- expr
 
 let parseStatement, parseStatementRef = createParserForwardedToRef()
 

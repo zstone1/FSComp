@@ -146,7 +146,7 @@ module endToEnd =
   let ``simple adding`` () = 
     Assert.AreEqual(4,@"public int main(){
            int y;
-           y = Add(2,2);
+           y = 2 + 2;
            return y;
        }" |> execute)
   [<Test>]
@@ -176,50 +176,59 @@ module endToEnd =
     Assert.AreEqual(40,@"public int main(){
          int x;
          x = 0;
-         x = Add(x,2);
-         x = Add(x,2);
-         x = Add(x,2);
-         x = Add(x,2);
-         x = Add(x,2);
-         x = Add(x,2);
-         x = Add(x,2);
-         x = Add(x,2);
-         x = Add(x,2);
-         x = Add(x,2);
-         x = Add(x,2);
-         x = Add(x,2);
-         x = Add(x,2);
-         x = Add(x,2);
-         x = Add(x,2);
-         x = Add(x,2);
-         x = Add(x,2);
-         x = Add(x,2);
-         x = Add(x,2);
-         x = Add(x,2);
+         x = x + 2;
+         x = x + 2;
+         x = x + 2;
+         x = x + 2;
+         x = x + 2;
+         x = x + 2;
+         x = x + 2;
+         x = x + 2;
+         x = x + 2;
+         x = x + 2;
+         x = x + 2;
+         x = x + 2;
+         x = x + 2;
+         x = x + 2;
+         x = x + 2;
+         x = x + 2;
+         x = x + 2;
+         x = x + 2;
+         x = x + 2;
+         x = x + 2;
          return x;
     }" |> execute) 
   [<Test>]
   let ``NestedAdd`` () = 
-    Assert.AreEqual(18,@"public int main(){
+    Assert.AreEqual(12,@"public int main(){
          int x;
-         x = Add(2,Add(2,Add(2,Add(2,Add(2,Add(2,Add(2,Add(2,2))))))));
+         x = (((((2 + 2) + 2) + 2) + 2) + 2);
          return x;
     }" |> execute) 
   [<Test>]
   let ``NestedAddReverse`` () = 
-    Assert.AreEqual(10,@"public int main(){
+    Assert.AreEqual(12,@"public int main(){
          int x;
-         x = Add(Add(Add(Add(2,2),2),2),2);
+         x = (2 + (2 + (2 + (2 + (2 + 2)))));
          return x;
     }" |> execute) 
   [<Test>]
   let ``add variables`` () = 
-    Assert.AreEqual(11,@"public int main(){
+    Assert.AreEqual(17,@"public int main(){
          int x;
          x = 3;
+         x = x + x;
          int y;
-         x = Add(x,x);
-         y = Add(x,5);
+         y = x + 5;
+         y = x + y;
          return y;
     }" |> execute) 
+
+  [<Test>]
+  let ``add self`` () = 
+    Assert.AreEqual(2, @"public int main() {
+      int x;
+      x = x + x;
+      return x;
+      }" |> execute)
  
