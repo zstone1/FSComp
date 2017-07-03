@@ -12,17 +12,19 @@ open Assignment
 let main argv =
   try
     let prgm = @" public int main(){
-        return 1 - 2 + 3;
-    }"
-    do printfn "hello?"
+        int x = 0;
+        return x
+   }"
     let p = prgm 
          |> parseProgram 
-//         |> convertModule
-//        ||> flattenModule
-//         |> fst
-//         |> assignModule
-//         |> serializeModule
+         |> convertModule
+        ||> flattenModule
+         |> fst
+         |> assignModule
+         |> serializeModule
     do printfn "the progam: %A" p
+    let rtn = ParserTests.endToEnd.execute prgm
+    do printfn "%i" rtn
     1
   with 
   | exn -> printfn "fail with: %A" exn; 1

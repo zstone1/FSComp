@@ -17,6 +17,7 @@ type Instruction =
   | CmpA of Location * Location
   | MovA of Location * Location
   | JnzA of LabelMarker
+  | JmpA of LabelMarker
   | LabelA of LabelMarker
   | AddA of Location * Location
   | SubA of Location * Location
@@ -31,6 +32,7 @@ let addInstruct i = updateState' (fun s -> {s with ainstructs = s.ainstructs @ [
 let Cmp a1 a2 = CmpA (a1,a2) |> addInstruct
 let Mov a1 a2 = MovA (a1, a2) |> addInstruct
 let Jnz l = JnzA l |> addInstruct
+let Jump l = JmpA l |> addInstruct
 let Label l = LabelA l |> addInstruct
 let Add a1 a2 = AddA (a1,a2) |> addInstruct
 let Sub a1 a2 = SubA (a1,a2) |> addInstruct
@@ -81,6 +83,7 @@ let assignInstruct = function
                                       return l}
       do! Mov setLoc (Reg RAX) }
   | JNZI l -> Jnz l
+  | JmpI l -> Jump l
   | ReturnI s -> state {
       let! loc =  getLoc s <!> getState
       do! Mov (Reg RDI) loc

@@ -24,6 +24,7 @@ let serializeInstruction st =
   | SubA (l1,l2) -> handleOp "sub" l1 l2
   | CmpA (l1,l2) -> handleOp "cmp" l1 l2
   | JnzA (LabelName l) -> sprintf "        jnz    %s" l
+  | JmpA (LabelName l) -> sprintf "        jmp    %s" l
   | SyscallA -> "        syscall"
   | LabelA (LabelName l) -> sprintf "%s:" l
 

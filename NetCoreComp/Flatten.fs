@@ -16,6 +16,7 @@ type Instruct =
   | CmpI of Atom * Atom
   | AssignI of string * Atom
   | JNZI of LabelMarker
+  | JmpI of LabelMarker
 //  | CallI of Atom * string * Atom list
   | ReturnI of Atom
   | LabelI of LabelMarker
@@ -37,6 +38,8 @@ let Label l = LabelI l |> addInstruct
 let Add a1 a2 = AddI (a1,a2) |> addInstruct
 
 let Sub a1 a2 = SubI (a1,a2) |> addInstruct
+
+let Jump l = JmpI l |> addInstruct
 
 
 let makeNamePre prefix : State<string,InterSt> = state {
@@ -75,12 +78,23 @@ let rec flattenStatement = function
   | Assignment ({name = n},e) -> Assign n =<< flattenExpression e
   | IfStat (label, guard, body) -> state {
       let! guardVar = flattenExpression guard
-      let! label = makeNamePre "lab" |>> LabelName
+      let! label = makeNamePre "if_lab" |>> LabelName
       do! Cmp guardVar (IntLitAtom 0)
       do! Jnz label
       do! mapMUnit flattenStatement body 
       do! Label label
       return () }
+  | While (lable, guard, body) -> state{
+      let! guardVar = flattenExpression guard
+      let! startLab = makeNamePre "while_start_lab" |>> LabelName
+      let! endLab = makeNamePre "while_end_lab" |>> LabelName
+      do! Label startLab
+      do! Cmp guardVar (IntLitAtom 0)
+      do! Jnz endLab
+      do! mapMUnit flattenStatement body
+      do! Jump startLab
+      do! Label endLab
+  }
     
 let flattenFunc fs n = 
   let init = {

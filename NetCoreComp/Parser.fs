@@ -15,6 +15,9 @@ type PStatement =
  | Execution of Expression
  | Declaration of string * string
  | Assignment of string * Expression
+ | While of Expression * PStatement list
+ | DeclAndAssign of string * string * Expression
+
  
 type FuncSignature = {
   access : string
@@ -45,7 +48,6 @@ let parseExpression = opp.ExpressionParser;
 let arithHelper s= InfixOperator(s, spaces, 1, Associativity.Left, fun x y -> Func ("_" + s,[x;y]))
 opp.AddOperator(arithHelper "-")
 opp.AddOperator(arithHelper "+")
-opp.AddOperator(arithHelper "*")
 
 let expr = 
    let parseInt = pint32 .>> spaces |>> IntLit
@@ -91,12 +93,24 @@ do parseStatementRef :=
                      .>> tok "="
                     .>>. parseExpression
                      |>> Assignment
+   let parseWhile = tok "while"
+                >>. (parseExpression |> betweenParens)
+               .>>. parseBody
+                |>> While
+   let parseDeclAndAssign = parse {
+       let! ty = parseName
+       let! var = parseName
+       do! tok "="
+       let! expr = parseExpression
+       return DeclAndAssign (ty, var ,expr)}
    
-   attempt parseReturn      <|> 
-   attempt parseIfStat      <|> 
-   attempt parseAssignment  <|>
-   attempt parseDeclaration <|>
-   attempt parseExecution   <?> 
+   attempt parseReturn        <|> 
+   attempt parseIfStat        <|> 
+   attempt parseAssignment    <|>
+   attempt parseDeclAndAssign <|>
+   attempt parseDeclaration   <|>
+   attempt parseWhile         <|>
+   attempt parseExecution     <?> 
    "Failed to parse statement"
 
 let parseSignature = parse {

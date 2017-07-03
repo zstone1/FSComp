@@ -51,6 +51,7 @@ type ASTStatement =
   | Execution of ASTExpression 
   | Declaration of ASTVariable
   | Assignment of ASTVariable * ASTExpression
+  | While of string * ASTExpression * ASTStatement list
  
 type ASTSignature = {
   access : Access
@@ -122,40 +123,61 @@ let introduceVariable ty name = scope {
    let updater st = {st with variables = decl :: st.variables}
    do! updateState updater |>> ignore
    return decl |> Declaration }
-   
+
+let convertControlStruct convertBody convertGuard def guard body = scope {
+      let! guard = convertGuard guard <!> getState 
+      let! before = getState 
+      let! body =  mapM convertBody body |>> List.collect id
+      let! after = getState
+      do! putState {after with variables = before.variables}
+      let name = sprintf "label_%i" after.uniqueNum
+      return def (name, guard, body) }
+
+let convertDeclaration ty varName =  scope {
+      let! s = getState
+      let var = findVariableByOriginal ty s
+      match var with 
+      | None -> return! introduceVariable ty varName |>> List.singleton
+      | Some _ -> return failf "variable %s is already in scope" varName }   
+
+let convertAssignment varName expr = scope {
+      let! e' =  convertExpr' expr <!> getState 
+      let! found = findVariableByOriginal varName <!> getState 
+      return match found with
+             | Some {ty = t1} when t1 <> (getType e') -> failf "variable %s has type %A, but expected %A" varName t1 e'
+             | None -> failf "variable %s is not in scope" varName
+             | (Some v) -> [(v,e') |> Assignment]}
+
 let rec convertStatement (sgn: ASTSignature) = function
   | Parser.ReturnStat r -> 
         getState 
     |>> convertExpr' r 
-    |>> function | e when (e |> getType) = sgn.returnTy -> e |> ReturnStat
+    |>> function | e when (e |> getType) = sgn.returnTy -> [e |> ReturnStat]
                  | _ -> failf "return %A didn't match expected %A" r sgn.returnTy
   
-  | Parser.Declaration (t,o) -> scope {
-      let! s = getState
-      let var = findVariableByOriginal o s
-      match var with 
-      | None -> return! introduceVariable t o
-      | Some _ -> return failf "variable %s is already in scope" o }
-              
-  | Parser.Execution e -> getState |>> (convertExpr' e >> Execution)
+  | Parser.Declaration (t,o) -> convertDeclaration t o            
+  | Parser.Execution e -> getState |>> (convertExpr' e >> Execution) |>> List.singleton
   
-  | Parser.Assignment (o,e) ->  scope {
-      let! e' =  convertExpr' e <!> getState 
-      let! found = findVariableByOriginal o <!> getState 
-      return match found with
-             | Some {ty = t1} when t1 <> (getType e') -> failf "variable %s has type %A, but expected %A" o t1 e'
-             | None -> failf "variable %s is not in scope" o 
-             | (Some v) -> (v,e') |> Assignment}
+  | Parser.Assignment (o,e) -> convertAssignment o e
             
   //I need to ensure the scope is restored after popping out of the body
-  | Parser.IfStat (e,stats) -> scope {
-      let! guard = convertExpr' e <!> getState 
-      let! before = getState 
-      let! body =  mapM (convertStatement sgn) stats
-      let! after = getState
-      do! putState {after with variables = before.variables}
-      let name = sprintf "label_%i" after.uniqueNum
-      return IfStat (name, guard, body) }
+  | Parser.IfStat (e,stats) -> convertControlStruct 
+                                 (convertStatement sgn) 
+                                 convertExpr'
+                                 (IfStat >> List.singleton)
+                                 e 
+                                 stats
+  | Parser.While (e, stats) -> convertControlStruct
+                                (convertStatement sgn)
+                                convertExpr'
+                                (While >> List.singleton)
+                                e
+                                stats
+  |Parser.DeclAndAssign (ty, v, e) -> scope {
+      let! decl = convertDeclaration ty v
+      let! assign = convertAssignment v e 
+      return decl @ assign } 
+                                 
 
 let convertFunction ({signature = sgn; body = body }:ParserFunction) = scope {
   let! sgn' = convertSignature sgn
@@ -166,7 +188,7 @@ let convertFunction ({signature = sgn; body = body }:ParserFunction) = scope {
     functions = hardCodedFunctions
   }
   do! putState scopeInit
-  let! body' = mapM (convertStatement sgn') body
+  let! body' = mapM (convertStatement sgn') body |>> List.collect id
   let! s = getState
   return {signature = sgn'; body = body';}
 }

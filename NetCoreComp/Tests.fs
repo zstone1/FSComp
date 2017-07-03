@@ -108,19 +108,21 @@ module endToEnd =
   open ASTBuilder
   open Swensen.Unquote
  
-  let testOutputDir = "/home/zach/cmp/TestOutput"
-  let runProc f args = 
+  let testOutputDir = "/home/zach/cmp/TestOutput/"
+  let runProc dir f args = 
     let proc = new System.Diagnostics.Process()
     proc.StartInfo.FileName <- f
     proc.StartInfo.Arguments <- args
     proc.StartInfo.UseShellExecute <- true
-    proc.StartInfo.WorkingDirectory <- "/home/zach/cmp/TestOutput"
+    proc.StartInfo.WorkingDirectory <- "/home/zach/cmp/TestOutput/" + dir
     do proc.Start() |> ignore
     do proc.WaitForExit()
     proc
 
   let mutable i =  0
   let execute prgm = 
+    let tName = TestContext.CurrentContext.Test.Name 
+    let proc = runProc tName
     let p = prgm 
          |> parseProgram 
          |> convertModule
@@ -128,17 +130,17 @@ module endToEnd =
          |> fst
          |> assignModule
          |> serializeModule
-    do System.IO.File.WriteAllText(testOutputDir + "/test1.asm", p)
-    use assemble = runProc "nasm" " -felf64 \"test1.asm\" -o \"Foo.o\""
-    use link = runProc "ld" "Foo.o -o Foo.out "
-    use proc = runProc "./Foo.out" ""
-    proc.ExitCode
+    do System.IO.Directory.CreateDirectory("/home/zach/cmp/TestOutput/" + tName) |> ignore
+    do System.IO.File.WriteAllText(testOutputDir + tName + "/test1.asm", p)
+    use assemble = proc "nasm" " -felf64 \"test1.asm\" -o \"Foo.o\""
+    use link = proc "ld" "Foo.o -o Foo.out "
+    use result = proc "./Foo.out" ""
+    result.ExitCode
 
   [<Test>]
   let simplest () = 
     Assert.AreEqual(5,@"public int main(){
-           int y;
-           y = 5;
+           int y = 5;
            return y;
        }" |> execute)
 
@@ -152,8 +154,7 @@ module endToEnd =
   [<Test>]
   let ``simple if`` () = 
    Assert.AreEqual(2,@"public int main(){
-          int x;
-          x = 1;
+          int x = 1;
           if(x)
           {
             return 1;
@@ -163,8 +164,7 @@ module endToEnd =
   [<Test>]
   let ``simple if skip`` () = 
     Assert.AreEqual(1,@"public int main(){
-          int x;
-          x = 0;
+          int x = 0;
           if(x)
           {
             return 1;
@@ -174,8 +174,7 @@ module endToEnd =
   [<Test>]
   let ``Add a lot`` () = 
     Assert.AreEqual(40,@"public int main(){
-         int x;
-         x = 0;
+         int x = 0;
          x = x + 2;
          x = x + 2;
          x = x + 2;
@@ -201,34 +200,42 @@ module endToEnd =
   [<Test>]
   let ``NestedAdd`` () = 
     Assert.AreEqual(12,@"public int main(){
-         int x;
-         x = (((((2 + 2) + 2) + 2) + 2) + 2);
+         int x = (((((2 + 2) + 2) + 2) + 2) + 2);
          return x;
     }" |> execute) 
   [<Test>]
   let ``NestedAddReverse`` () = 
     Assert.AreEqual(12,@"public int main(){
-         int x;
-         x = (2 + (2 + (2 + (2 + (2 + 2)))));
+         int x = (2 + (2 + (2 + (2 + (2 + 2)))));
          return x;
     }" |> execute) 
   [<Test>]
   let ``add variables`` () = 
     Assert.AreEqual(17,@"public int main(){
-         int x;
-         x = 3;
+         int x = 3;
          x = x + x;
-         int y;
-         y = x + 5;
+         int y = x + 5;
          y = x + y;
          return y;
     }" |> execute) 
 
   [<Test>]
-  let ``add self`` () = 
+  let ``sub and add`` () = 
     Assert.AreEqual(2, @"public int main() {
-      int x;
-      x = x + x;
+      int x = 1 - 2 + 3;
       return x;
       }" |> execute)
- 
+
+  [<Test>]
+  let ``while with terminator`` () = 
+    Assert.AreEqual(2, @" public int main(){
+        int terminate = 0;
+        int i = 10;
+        while (terminate){
+          i = i-1;
+          if(i - 2){
+              terminate = 1;
+          };
+        };
+        return i;
+    }" |> execute)
