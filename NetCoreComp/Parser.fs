@@ -79,8 +79,8 @@ opp.TermParser <- expr
 let parseStatement, parseStatementRef = createParserForwardedToRef()
 
 do parseStatementRef :=
-   let parseReturn = tok "return " >>. parseExpression |>> ReturnStat
-   let parseBody =  sepEndBy parseStatement (tok ";") |> betweenCurlys
+   let parseReturn = tok "return " >>. parseExpression |>> ReturnStat 
+   let parseBody =  many parseStatement |> betweenCurlys
    let parseIfStat = tok "if"
                  >>. (parseExpression |> betweenParens)
                 .>>. parseBody
@@ -104,14 +104,14 @@ do parseStatementRef :=
        let! expr = parseExpression
        return DeclAndAssign (ty, var ,expr)}
    
-   attempt parseReturn        <|> 
-   attempt parseIfStat        <|> 
-   attempt parseAssignment    <|>
-   attempt parseDeclAndAssign <|>
-   attempt parseDeclaration   <|>
-   attempt parseWhile         <|>
-   attempt parseExecution     <?> 
-   "Failed to parse statement"
+   (attempt parseReturn .>> tok ";")
+   <|> attempt parseIfStat 
+   <|> (attempt parseAssignment .>> tok ";")
+   <|> (attempt parseDeclAndAssign .>> tok ";")
+   <|> (attempt parseDeclaration .>> tok ";")
+   <|> attempt parseWhile         
+   <|> (attempt parseExecution .>> tok ";")
+   <?> "Failed to parse statement"
 
 let parseSignature = parse {
     let! access = parseName
@@ -131,7 +131,7 @@ let parseSignature = parse {
   
 let parseFunction = parse {
   let! signature = parseSignature
-  let! body = sepEndBy parseStatement (tok ";") |> betweenCurlys
+  let! body = many parseStatement |> betweenCurlys
   return {signature = signature; body = body} }
 
 let parseModule = spaces >>. many parseFunction .>> spaces .>> eof

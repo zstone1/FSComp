@@ -12,8 +12,7 @@ open Assignment
 let main argv =
   try
     let prgm = @" public int main(){
-        int x = 0;
-        return x
+        return 5;
    }"
     let p = prgm 
          |> parseProgram 
@@ -23,7 +22,7 @@ let main argv =
          |> assignModule
          |> serializeModule
     do printfn "the progam: %A" p
-    let rtn = ParserTests.endToEnd.execute prgm
+    let rtn = ParserTests.endToEnd.executeInDir "manualTest" prgm
     do printfn "%i" rtn
     1
   with 

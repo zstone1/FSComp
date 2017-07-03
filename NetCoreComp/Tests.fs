@@ -45,19 +45,19 @@ module parserTests =
   let statCompare = parseBit parseStatement
   
   [<Test>]
-  let ``parse return``() = ReturnStat (IntLit 5) =! statCompare "return 5"
+  let ``parse return``() = ReturnStat (IntLit 5) =! statCompare "return 5;"
   
   [<Test>]
-  let ``parse execution``() = Execution (Func ("foo",[])) =! statCompare "foo ()"
+  let ``parse execution``() = Execution (Func ("foo",[])) =! statCompare "foo ();"
 
   [<Test>] 
   let ``parse if``() = IfStat (Variable "x", [ReturnStat (IntLit 5); Execution (Func ("foo", [Variable "y"]))]) 
                        =! statCompare "if( x ) {return 5;foo(y);}"
   [<Test>]
-  let ``parse declaration``() = Declaration ("ty","foo") =! statCompare "ty foo"
+  let ``parse declaration``() = Declaration ("ty","foo") =! statCompare "ty foo;"
   
   [<Test>] 
-  let ``parse assignment``() = Assignment ("foo", Variable "x") =! statCompare "foo = x"
+  let ``parse assignment``() = Assignment ("foo", Variable "x") =! statCompare "foo = x;"
   
   let sigCompare = parseBit parseSignature
   [<Test>]
@@ -120,9 +120,8 @@ module endToEnd =
     proc
 
   let mutable i =  0
-  let execute prgm = 
-    let tName = TestContext.CurrentContext.Test.Name 
-    let proc = runProc tName
+  let executeInDir testDir prgm= 
+    let proc = runProc testDir
     let p = prgm 
          |> parseProgram 
          |> convertModule
@@ -130,13 +129,14 @@ module endToEnd =
          |> fst
          |> assignModule
          |> serializeModule
-    do System.IO.Directory.CreateDirectory("/home/zach/cmp/TestOutput/" + tName) |> ignore
-    do System.IO.File.WriteAllText(testOutputDir + tName + "/test1.asm", p)
+    do System.IO.Directory.CreateDirectory("/home/zach/cmp/TestOutput/" + testDir) |> ignore
+    do System.IO.File.WriteAllText(testOutputDir + testDir + "/test1.asm", p)
     use assemble = proc "nasm" " -felf64 \"test1.asm\" -o \"Foo.o\""
     use link = proc "ld" "Foo.o -o Foo.out "
     use result = proc "./Foo.out" ""
     result.ExitCode
 
+  let execute = executeInDir TestContext.CurrentContext.Test.Name 
   [<Test>]
   let simplest () = 
     Assert.AreEqual(5,@"public int main(){
@@ -158,7 +158,7 @@ module endToEnd =
           if(x)
           {
             return 1;
-          };
+          }
           return 2;
      }" |> execute)
   [<Test>]
@@ -168,7 +168,7 @@ module endToEnd =
           if(x)
           {
             return 1;
-          };
+          }
           return 2;
      }" |> execute)
   [<Test>]
@@ -235,7 +235,7 @@ module endToEnd =
           i = i-1;
           if(i - 2){
               terminate = 1;
-          };
-        };
+          }
+        }
         return i;
     }" |> execute)
