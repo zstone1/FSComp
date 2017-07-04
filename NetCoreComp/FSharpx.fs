@@ -200,7 +200,7 @@ module State =
       return next
     }
     
-    let public updateState' f = updateState f |>> ignore
+    let public updateStateU f = updateState f |>> ignore
 
     let foldM f s = 
         Seq.fold (fun acc t -> acc >>= (flip f) t) (returnM s)

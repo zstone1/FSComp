@@ -28,7 +28,7 @@ type InterSt = {
   instructs : Instruct list
 }
 
-let addInstruct i = updateState' (fun s -> {s with instructs = s.instructs @ [i]})
+let addInstruct i = updateStateU (fun s -> {s with instructs = s.instructs @ [i]})
 let Cmp a1 a2 = CmpI (a1,a2) |> addInstruct
 let Assign a1 a2 = AssignI (a1, a2) |> addInstruct
 let Jnz l = JNZI l |> addInstruct

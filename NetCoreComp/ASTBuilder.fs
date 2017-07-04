@@ -4,7 +4,7 @@ open Parser
 open FSharpx.State
 open FSharpx
 
-type Ty = IntTy | StringTy
+type Ty = IntTy
 type Access = Public | Private
 
 type ASTVariable = {
@@ -28,10 +28,6 @@ type Scope = {
 type private Scoped<'T> = State<'T,Scope>
 let scope = state
 
-let findVariableByOriginal vorigninal scope = List.tryFind (fun {originalName = n} -> n = vorigninal) scope.variables
-
-let findFunction' name args funcs = List.tryFind (fun (ref) -> ref.name = name && args = ref.argTys) funcs
-let findFunction name args scope = findFunction' name args scope.functions
 
 type ASTExpression =
  | ASTLit of int
@@ -43,8 +39,7 @@ let getType = function
   | ASTVar {ty = t} -> t
   | ASTFunc (t,_) -> t.ty
 
-let name ({name = n}:ASTVariable) = n
- 
+
 type ASTStatement = 
   | ReturnStat of ASTExpression
   | IfStat of string * ASTExpression * ASTStatement list
@@ -52,10 +47,10 @@ type ASTStatement =
   | Declaration of ASTVariable
   | Assignment of ASTVariable * ASTExpression
   | While of string * ASTExpression * ASTStatement list
- 
+
+
 type ASTSignature = {
   access : Access
-  isStatic : bool
   returnTy : Ty
   name : string
   args : ASTVariable list
@@ -66,6 +61,11 @@ type ASTFunction = {
   body : ASTStatement list
 }
 
+let findVarByOriginalName vorigninal scope = List.tryFind (fun {originalName = n} -> n = vorigninal) scope.variables
+
+let findFunction name args scope = List.tryFind (fun ref -> args = ref.argTys && ref.name = name) scope.functions
+
+
 let parseAccess = function
   | "public" -> Public
   | "private" -> Private
@@ -73,7 +73,6 @@ let parseAccess = function
   
 let parseTy = function
   | "int" -> IntTy
-  | "string" -> StringTy
   | x -> failf "fail to parse type %s" x
   
 let uniqify originalName = scope {
@@ -82,17 +81,14 @@ let uniqify originalName = scope {
   return sprintf "%s_%i" originalName s.uniqueNum
 }
 
-let argConverter orig t = scope {
-  let! newName = uniqify orig
-  return { ty = parseTy t; originalName = orig; name = newName }
-}
-
 let convertSignature (s: FuncSignature) = scope {
-  let! args = mapM (uncurry argConverter) s.args
+  let argConverter (t, orig) = scope {
+    let! newName = uniqify orig
+    return { ty = parseTy t; originalName = orig; name = newName } }
+  let! args = mapM argConverter s.args
   return { 
-   access = parseAccess s.access 
-   isStatic = s.isStatic
-   returnTy = parseTy s.returnTy
+   access = s.access |> parseAccess
+   returnTy = s.returnTy |> parseTy
    name = s.name
    args = args }
 }
@@ -102,26 +98,25 @@ let hardCodedFunctions = [
   {ty = IntTy; name = MinusName; argTys = [IntTy; IntTy]};
 ]
 
-let rec convertExpr scope = function
+let rec convertExpr e scope = 
+  match e with
   | IntLit x -> ASTLit x
-  | StringLit _ as x -> failf "strings not supported yet"
   | Variable original as x -> 
-    findVariableByOriginal original scope 
+    findVarByOriginalName original scope 
     |> function | Some v -> ASTVar v
                 | None  -> failf "variable %s is not in scope" original
   | Func (v,args) as x -> 
-    let newArgs = args |> List.map (convertExpr scope)
-    match findFunction v (List.map getType newArgs) scope with 
-    | Some t -> ASTFunc (t, newArgs)
+    let convertedArgs = args |> List.map (fun e -> convertExpr e scope)
+    match findFunction v (List.map getType convertedArgs) scope with 
+    | Some t -> ASTFunc (t, convertedArgs)
     | None -> failf "function %A is not in scope" x
 
-let rec convertExpr' = flip convertExpr
 
 let introduceVariable ty name = scope {
    let! newName = uniqify name
    let decl = {ty = parseTy ty; originalName = name; name = newName}
    let updater st = {st with variables = decl :: st.variables}
-   do! updateState updater |>> ignore
+   do! updateStateU updater
    return decl |> Declaration }
 
 let convertControlStruct convertBody convertGuard def guard body = scope {
@@ -135,14 +130,14 @@ let convertControlStruct convertBody convertGuard def guard body = scope {
 
 let convertDeclaration ty varName =  scope {
       let! s = getState
-      let var = findVariableByOriginal ty s
+      let var = findVarByOriginalName ty s
       match var with 
       | None -> return! introduceVariable ty varName |>> List.singleton
       | Some _ -> return failf "variable %s is already in scope" varName }   
 
 let convertAssignment varName expr = scope {
-      let! e' =  convertExpr' expr <!> getState 
-      let! found = findVariableByOriginal varName <!> getState 
+      let! e' =  convertExpr expr <!> getState 
+      let! found = findVarByOriginalName varName <!> getState 
       return match found with
              | Some {ty = t1} when t1 <> (getType e') -> failf "variable %s has type %A, but expected %A" varName t1 e'
              | None -> failf "variable %s is not in scope" varName
@@ -151,25 +146,25 @@ let convertAssignment varName expr = scope {
 let rec convertStatement (sgn: ASTSignature) = function
   | Parser.ReturnStat r -> 
         getState 
-    |>> convertExpr' r 
+    |>> convertExpr r 
     |>> function | e when (e |> getType) = sgn.returnTy -> [e |> ReturnStat]
                  | _ -> failf "return %A didn't match expected %A" r sgn.returnTy
   
   | Parser.Declaration (t,o) -> convertDeclaration t o            
-  | Parser.Execution e -> getState |>> (convertExpr' e >> Execution) |>> List.singleton
+  | Parser.Execution e -> getState |>> (convertExpr e >> Execution) |>> List.singleton
   
   | Parser.Assignment (o,e) -> convertAssignment o e
             
   //I need to ensure the scope is restored after popping out of the body
   | Parser.IfStat (e,stats) -> convertControlStruct 
                                  (convertStatement sgn) 
-                                 convertExpr'
+                                 convertExpr
                                  (IfStat >> List.singleton)
                                  e 
                                  stats
   | Parser.While (e, stats) -> convertControlStruct
                                 (convertStatement sgn)
-                                convertExpr'
+                                convertExpr
                                 (While >> List.singleton)
                                 e
                                 stats

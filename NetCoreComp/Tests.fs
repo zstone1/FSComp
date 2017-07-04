@@ -16,16 +16,6 @@ module parserTests =
   [<Test>]
   let ``parse int literal``() = IntLit 123 =! parseBit parseExpression "123 " 
   
-  let strLitCompare input result = StringLit result =! parseExpr input
-  
-  [<Test>]
-  let ``parse string literals``() = StringLit "foo" =! parseExpr "\"foo\"" 
-  
-  [<Test>]
-  let ``escape slashes``() = StringLit @"a\" =! parseExpr @"""a\\"""
-  
-  [<Test>]
-  let ``escape others``() = StringLit "\n\r" =! parseExpr @"""\n\r"""
   
   [<Test>] 
   let ``variable name``() = Variable "myVar" =! parseExpr "myVar"
@@ -36,9 +26,6 @@ module parserTests =
   [<Test>]
   let ``one arg function``() = Func ("foo",[IntLit 123]) =! parseExpr "foo(123)"
   
-  [<Test>]
-  let ``two arg function``() = Func ("foo",[IntLit 123; StringLit "str"; Variable "v"]) 
-                               =! parseExpr "foo(123, \"str\", v)"
   [<Test>] 
   let ``nested funtion``() = Func ("foo",[Func("bar",[])]) =! parseExpr "foo(bar())"
   
@@ -64,7 +51,6 @@ module parserTests =
   let ``parse static func``() =
     {  
       access = "public"
-      isStatic = true
       returnTy = "int"
       args = [("foo","bar")]
       name = "f"
@@ -74,7 +60,6 @@ module parserTests =
   let ``parse non-static func``() =
     {  
       access = "public"
-      isStatic = false
       returnTy = "int"
       args = [("foo","bar"); ("fiz","buz")]
       name = "f"
@@ -90,7 +75,6 @@ module parserTests =
              signature = 
                {  
                  access = "public"
-                 isStatic = false
                  returnTy = "int"
                  args = []
                  name = "f"
@@ -239,3 +223,23 @@ module endToEnd =
         }
         return i;
     }" |> execute)
+  [<Test>]
+  let ``call no args`` () = 
+    Assert.AreEqual(5, @" 
+    public int main(){
+      int y = other();
+      return y;
+    }
+    public int other() {
+      return 5;
+    } " |> execute)
+  [<Test>]
+  let ``call no args 2`` () = 
+    Assert.AreEqual(7, @" 
+    public int main(){
+      int y = 2 + other();
+      return y;
+    }
+    public int other() {
+      return 5;
+    } " |> execute)

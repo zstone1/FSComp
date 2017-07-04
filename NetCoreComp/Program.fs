@@ -13,15 +13,13 @@ let main argv =
   try
     let prgm = @" 
     public int main(){
-        int x =  other();
-        int y = x + 6;
-        return y;
+      int y = other();
+      return y;
     }
-    
-    public int other(){
-        return 10;
-    }
-    "
+    public int other() {
+      return 5;
+    } 
+   "
     let p = prgm 
          |> parseProgram 
          |> convertModule

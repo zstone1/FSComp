@@ -41,9 +41,9 @@ type AssignSt = {
     callLabName : string
 }
 
-let modifyRsp i = updateState' (fun s -> {s with rspMod = s.rspMod + i})
+let modifyRsp i = updateStateU (fun s -> {s with rspMod = s.rspMod + i})
 
-let addInstruct i = updateState' (fun s -> {s with ainstructs = s.ainstructs @ [i]})
+let addInstruct i = updateStateU (fun s -> {s with ainstructs = s.ainstructs @ [i]})
 
 type StateBuilder with
   member x.Yield(i) = i |> addInstruct
@@ -64,7 +64,7 @@ let getLoc a st =
 
 let assignLoc var loc = 
   let updater s = {s with locations = Map.add var loc s.locations}
-  updateState' updater
+  updateStateU updater
 
 let incrementStackDepth = state{
     let! s = getState
