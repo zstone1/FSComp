@@ -57,7 +57,7 @@ let assignLoc var loc =
 
 let incrementStackDepth = state{
     let! s = getState
-    let nextStackLoc = s.stackDepth
+    let nextStackLoc = s.stackDepth + 8
     do! putState {s with stackDepth = s.stackDepth + 8}
     return nextStackLoc
 }

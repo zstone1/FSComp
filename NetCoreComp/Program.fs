@@ -13,7 +13,8 @@ let main argv =
   try
     let prgm = @" public int main(){
         int x = 5;
-        return x;
+        int y = x + 6;
+        return y;
    }"
     let p = prgm 
          |> parseProgram 
