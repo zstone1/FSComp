@@ -69,11 +69,6 @@ let rec flattenExpression = function
     do! Call rtnName (LabelName s.name) []
     return rtnName }
   | ASTFunc _ ->  failf "only add and sub are supported"
-//  | ASTFunc ({name = n},v) -> state {
-//    let! args = mapM flattenExpression v
-//    let! rtnName = makeName |>> VarName
-//    do! Call rtnName n args
-//    return rtnName }
 
 let rec flattenStatement = function
   | ReturnStat e -> Return =<< flattenExpression e 

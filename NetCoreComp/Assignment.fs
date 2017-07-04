@@ -13,6 +13,10 @@ type Location =
   | Stack of int (*base dist*) * int (*rspMod*)
   | Imm of int
 
+type SavedLocation =
+  | SReg of Register
+  | DistFromBase of int
+
 
 type Instruction = 
   | CmpA of Location * Location
@@ -30,12 +34,14 @@ type Instruction =
 
 type AssignSt = {
     ainstructs : Instruction list
-    locations : Map<string, Location>
+    locations : Map<string, SavedLocation>
     stackDepth : int
     rspMod : int
     rtnLabName : string
     callLabName : string
 }
+
+let modifyRsp i = updateState' (fun s -> {s with rspMod = s.rspMod + i})
 
 let addInstruct i = updateState' (fun s -> {s with ainstructs = s.ainstructs @ [i]})
 
@@ -45,7 +51,11 @@ type StateBuilder with
 let tryGetLoc a st = 
   match a with 
   | IntLitAtom i -> Imm i |> Some
-  | VarName n -> Map.tryFind n st.locations
+  | VarName n -> 
+      match Map.tryFind n st.locations with 
+      | None -> None
+      | Some (SReg r) -> Reg r |> Some
+      | Some (DistFromBase pos) -> Stack (pos, st.rspMod) |> Some
 
 let getLoc a st = 
   match tryGetLoc a st with
@@ -65,10 +75,9 @@ let incrementStackDepth = state{
 
 let assignLocOnStack var = state {
   let! pos = incrementStackDepth
-  let! modifier = (fun i -> i.rspMod) <!> getState
-  let loc = Stack (pos, modifier)
+  let loc = DistFromBase pos
   do! assignLoc var loc
-  return loc
+  return! getLoc (VarName var) <!> getState
 }
 
 let handleArithWithRax instr a b = state {
@@ -81,14 +90,36 @@ let handleArithWithRax instr a b = state {
       yield MovA (aloc, Reg RAX) }
 
 let saveRegisters = state {
-  yield PushA (RAX)
-  return (state {yield PopA RAX})
+  let callerSaveRegs = [RAX; RDI]
+  let rspMod = (List.length callerSaveRegs * 8)
+  do! modifyRsp rspMod
+  for r in callerSaveRegs do yield PushA r
+  return (state {
+    for r in List.rev callerSaveRegs do yield PopA r
+    do! modifyRsp (-1 * rspMod)})
+}
+
+let alignRsp = state {
+  let! modifier = (fun i -> i.rspMod) <!> getState
+  match modifier % 16 with 
+  | 8 -> return empty
+  | 0 -> do! modifyRsp 8
+         yield SubA (Reg RSP, Imm 8)
+         return (state {
+           yield AddA (Reg RSP, Imm 8)
+           do! modifyRsp -8
+         })
+  | i -> return failf "rsp is somehow aligned to %i. Oh dear god" i
 }
 
 ///Predlude for calling functions. Returns the coressponding epilogue
 let callPrologue = state {
-  //let! restoreRegisters = saveRegisters
-  return empty
+  let! restoreRegisters = saveRegisters
+  let! restoreRsp = alignRsp
+  return state {
+    do! restoreRsp
+    do! restoreRegisters
+  }
 }
 
 let assignInstruct = function
