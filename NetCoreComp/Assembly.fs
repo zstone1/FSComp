@@ -16,7 +16,8 @@ let getDepthWithOffset st = st.stackDepth + (st.stackDepth - 8) % 16
 let serializeLocation stackDepth = function 
   | Reg x -> (sprintf "%A" x).ToLowerInvariant()
   | Imm (i) -> i.ToString()
-  | Stack (b, modifier) -> (stackDepth + modifier) - b |> sprintf "qword [rsp + %i]" //stackgrowsdown.com
+  | Stack { distFromBase = b; currentRspMod = modifier} ->
+       (stackDepth + modifier) - b |> sprintf "qword [rsp + %i]" //stackgrowsdown.com
 
 let serializeInstruction st = 
   let serialize = serializeLocation st

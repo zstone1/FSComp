@@ -34,19 +34,15 @@ type ASTExpression =
  | ASTVar of ASTVariable
  | ASTFunc of ASTFuncRef * (ASTExpression list)
 
-let getType = function
-  | ASTLit _ -> IntTy
-  | ASTVar {ty = t} -> t
-  | ASTFunc (t,_) -> t.ty
 
 
 type ASTStatement = 
   | ReturnStat of ASTExpression
-  | IfStat of string * ASTExpression * ASTStatement list
+  | IfStat of ASTExpression * ASTStatement list
   | Execution of ASTExpression 
   | Declaration of ASTVariable
   | Assignment of ASTVariable * ASTExpression
-  | While of string * ASTExpression * ASTStatement list
+  | While of ASTExpression * ASTStatement list
 
 
 type ASTSignature = {
@@ -60,6 +56,11 @@ type ASTFunction = {
   signature : ASTSignature
   body : ASTStatement list
 }
+
+let getType = function
+  | ASTLit _ -> IntTy
+  | ASTVar {ty = t} -> t
+  | ASTFunc (t,_) -> t.ty
 
 let findVarByOriginalName vorigninal scope = List.tryFind (fun {originalName = n} -> n = vorigninal) scope.variables
 
@@ -125,8 +126,7 @@ let convertControlStruct convertGuard guard convertBody body def = scope {
       let! body =  mapM convertBody body |>> List.collect id
       let! after = getState
       do! putState {after with variables = before.variables}
-      let name = sprintf "label_%i" after.uniqueNum
-      return def (name, guard, body) }
+      return def (guard, body) }
 
 let convertDeclaration ty varName =  scope {
       let! s = getState

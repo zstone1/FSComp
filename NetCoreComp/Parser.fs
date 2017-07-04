@@ -3,19 +3,19 @@ open FParsec
 open FParsec.CharParsers
 open System
 
-type Expression =
+type PExpression =
  | IntLit of int
  | Variable of string
- | Func of string * (Expression list)
+ | Func of string * (PExpression list)
 
 type PStatement = 
- | ReturnStat of Expression
- | IfStat of Expression * PStatement list
- | Execution of Expression
+ | ReturnStat of PExpression
+ | IfStat of PExpression * PStatement list
+ | Execution of PExpression
  | Declaration of string * string
- | Assignment of string * Expression
- | While of Expression * PStatement list
- | DeclAndAssign of string * string * Expression
+ | Assignment of string * PExpression
+ | While of PExpression * PStatement list
+ | DeclAndAssign of string * string * PExpression
 
  
 type FuncSignature = {

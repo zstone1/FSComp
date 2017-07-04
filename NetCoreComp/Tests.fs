@@ -47,14 +47,6 @@ module parserTests =
   let ``parse assignment``() = Assignment ("foo", Variable "x") =! statCompare "foo = x;"
   
   let sigCompare = parseBit parseSignature
-  [<Test>]
-  let ``parse static func``() =
-    {  
-      access = "public"
-      returnTy = "int"
-      args = [("foo","bar")]
-      name = "f"
-    }  =! sigCompare "public static int f(foo bar)"
   
   [<Test>]
   let ``parse non-static func``() =

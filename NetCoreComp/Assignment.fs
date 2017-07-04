@@ -8,15 +8,15 @@ type Register =
   | RDI
   | RSP
 
+type StackPosition = {distFromBase : int; currentRspMod : int}
 type Location = 
   | Reg of Register
-  | Stack of int (*base dist*) * int (*rspMod*)
+  | Stack of StackPosition 
   | Imm of int
 
 type SavedLocation =
   | SReg of Register
   | DistFromBase of int
-
 
 type Instruction = 
   | CmpA of Location * Location
@@ -34,7 +34,7 @@ type Instruction =
 
 type AssignSt = {
     ainstructs : Instruction list
-    locations : Map<string, SavedLocation>
+    locations : Map<Variable, SavedLocation>
     stackDepth : int
     rspMod : int
     rtnLabName : string
@@ -43,19 +43,16 @@ type AssignSt = {
 
 let modifyRsp i = updateStateU (fun s -> {s with rspMod = s.rspMod + i})
 
-let addInstruct i = updateStateU (fun s -> {s with ainstructs = s.ainstructs @ [i]})
-
-type StateBuilder with
-  member x.Yield(i) = i |> addInstruct
-
+type StateBuilder with 
+  member x.Yield(i) = updateStateU (fun s -> {s with ainstructs = s.ainstructs @ [i]})
 let tryGetLoc a st = 
   match a with 
   | IntLitAtom i -> Imm i |> Some
-  | VarName n -> 
+  | VarAtom n -> 
       match Map.tryFind n st.locations with 
       | None -> None
       | Some (SReg r) -> Reg r |> Some
-      | Some (DistFromBase pos) -> Stack (pos, st.rspMod) |> Some
+      | Some (DistFromBase pos) -> Stack {distFromBase = pos; currentRspMod = st.rspMod} |> Some
 
 let getLoc a st = 
   match tryGetLoc a st with
@@ -77,13 +74,12 @@ let assignLocOnStack var = state {
   let! pos = incrementStackDepth
   let loc = DistFromBase pos
   do! assignLoc var loc
-  return! getLoc (VarName var) <!> getState
+  return! getLoc (VarAtom var) <!> getState
 }
 
 let handleArithWithRax instr a b = state {
       let! s = getState
-      let aloc = getLoc a s 
-      yield MovA (Reg RAX, Reg RAX)
+      let aloc = getLoc (VarAtom a) s 
       yield MovA (Reg RAX, aloc)
       let bloc = getLoc b s
       yield instr (Reg RAX, bloc)
@@ -109,7 +105,7 @@ let alignRsp = state {
            yield AddA (Reg RSP, Imm 8)
            do! modifyRsp -8
          })
-  | i -> return failf "rsp is somehow aligned to %i. Oh dear god" i
+  | i -> return failf "rsp is somehow unaligned to %i. Oh dear god" i
 }
 
 ///Predlude for calling functions. Returns the coressponding epilogue
@@ -124,32 +120,32 @@ let callPrologue = state {
 
 let assignInstruct = function
   | CmpI (a,b) -> state {
-      let! l1 = (getLoc a <!> getState) 
+      let! l1 = (getLoc (VarAtom a) <!> getState) 
       let! l2 = (getLoc b <!> getState)
       yield CmpA (l1, l2) }
   | AssignI (s,v) -> state {
       let! st = getState
       let valLoc = getLoc v st
       yield MovA (Reg RAX, valLoc)
-      let! setLoc = match tryGetLoc (VarName s) st with
+      let! setLoc = match tryGetLoc (VarAtom s) st with
                     | Some s -> s |> returnM
                     | None -> assignLocOnStack s 
       yield MovA (setLoc, Reg RAX) }
-  | JNZI l -> state { yield JnzA l }
+  | JnzI l -> state { yield JnzA l }
   | JmpI l -> state { yield JmpA l }
-  | ReturnI s -> state { 
+  | ReturnI rtnVal -> state { 
       let! label = (fun i-> i.rtnLabName) <!> getState
-      let! rtnLoc = getLoc s <!> getState
+      let! rtnLoc = getLoc rtnVal <!> getState
       yield MovA (Reg RAX, rtnLoc)
       yield JmpA (label |> LabelName)
    }
   | LabelI l -> state { yield LabelA l }
   | AddI (a,b) -> handleArithWithRax AddA a b
   | SubI (a,b) -> handleArithWithRax SubA a b
-  | CallI ((VarName n), l, []) -> state {
+  | CallI (v, l, []) -> state {
     let! callEpilogue = callPrologue
     yield CallA l 
-    let! rtnLoc = assignLocOnStack n
+    let! rtnLoc = assignLocOnStack v
     yield MovA (rtnLoc, Reg RAX)
     do! callEpilogue }
   | CallI _ -> failf "no args yet"
