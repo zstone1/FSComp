@@ -105,11 +105,11 @@ do parseStatementRef :=
        return DeclAndAssign (ty, var ,expr)}
    
    (attempt parseReturn .>> tok ";")
-   <|> attempt parseIfStat 
+   <|> (attempt parseIfStat)
    <|> (attempt parseAssignment .>> tok ";")
    <|> (attempt parseDeclAndAssign .>> tok ";")
    <|> (attempt parseDeclaration .>> tok ";")
-   <|> attempt parseWhile         
+   <|> (attempt parseWhile)
    <|> (attempt parseExecution .>> tok ";")
    <?> "Failed to parse statement"
 

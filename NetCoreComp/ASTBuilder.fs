@@ -193,11 +193,20 @@ let convertFunction ({signature = sgn; body = body }:ParserFunction) = scope {
   return {signature = sgn'; body = body';}
 }
 
-let public convertModule fs= 
+let getFuncsInModule (fs :ParserFunction list) = 
+  let getRef {ParserFunction.signature = s} = {
+    ty = parseTy s.returnTy
+    name = s.name
+    argTys = List.map (parseTy << fst) s.args
+  }
+  List.map getRef fs
+
+let public convertModule fs = 
+  let signatures = getFuncsInModule fs
   let scopeInit = {
     uniqueNum = 0
     variables = []
-    functions = hardCodedFunctions
+    functions = hardCodedFunctions @ signatures
   }
   run (mapM convertFunction fs) scopeInit
 

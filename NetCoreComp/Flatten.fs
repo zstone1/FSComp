@@ -17,7 +17,7 @@ type Instruct =
   | AssignI of string * Atom
   | JNZI of LabelMarker
   | JmpI of LabelMarker
-//  | CallI of Atom * string * Atom list
+  | CallI of Atom * LabelMarker * Atom list
   | ReturnI of Atom
   | LabelI of LabelMarker
   | AddI of Atom * Atom
@@ -33,7 +33,7 @@ let Cmp a1 a2 = CmpI (a1,a2) |> addInstruct
 let Assign a1 a2 = AssignI (a1, a2) |> addInstruct
 let Jnz l = JNZI l |> addInstruct
 let Return a = ReturnI a |> addInstruct
-//let Call a b c = CallI (a,b,c) |> addInstruct
+let Call a b c = CallI (a,b,c) |> addInstruct
 let Label l = LabelI l |> addInstruct
 let Add a1 a2 = AddI (a1,a2) |> addInstruct
 
@@ -64,7 +64,11 @@ let rec flattenExpression = function
       handleArith Add flattenExpression x y
   | ASTFunc ({name = MinusName; argTys = [IntTy;IntTy]}, [x;y]) -> 
       handleArith Sub flattenExpression x y
-  | ASTFunc (_,_) -> failf "only add and sub are supported"
+  | ASTFunc (s,[]) -> state {
+    let! rtnName = makeName |>> VarName
+    do! Call rtnName (LabelName s.name) []
+    return rtnName }
+  | ASTFunc _ ->  failf "only add and sub are supported"
 //  | ASTFunc ({name = n},v) -> state {
 //    let! args = mapM flattenExpression v
 //    let! rtnName = makeName |>> VarName
@@ -101,13 +105,12 @@ let flattenFunc fs n =
     uniqueNum = n
     instructs = []
   }
-  let work = Label (LabelName fs.signature.name)
-          *> mapMUnit flattenStatement fs.body
+  let work = mapMUnit flattenStatement fs.body
   exec work init
 
 let flattenModule fs (scope:Scope) = 
   let seed = scope.uniqueNum
   let accum (acc,i) f =
      let {instructs = l; uniqueNum = i'} = flattenFunc f i
-     (l :: acc, i')
+     ((f.signature,l) :: acc, i')
   List.fold accum ([],scope.uniqueNum) fs

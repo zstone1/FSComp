@@ -12,7 +12,8 @@ open Assignment
 let main argv =
   try
     let prgm = @" public int main(){
-        return 5;
+        int x = 5;
+        return x;
    }"
     let p = prgm 
          |> parseProgram 
