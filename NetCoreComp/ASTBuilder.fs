@@ -119,7 +119,7 @@ let introduceVariable ty name = scope {
    do! updateStateU updater
    return decl |> Declaration }
 
-let convertControlStruct convertBody convertGuard def guard body = scope {
+let convertControlStruct convertGuard guard convertBody body def = scope {
       let! guard = convertGuard guard <!> getState 
       let! before = getState 
       let! body =  mapM convertBody body |>> List.collect id
@@ -130,15 +130,14 @@ let convertControlStruct convertBody convertGuard def guard body = scope {
 
 let convertDeclaration ty varName =  scope {
       let! s = getState
-      let var = findVarByOriginalName ty s
-      match var with 
-      | None -> return! introduceVariable ty varName |>> List.singleton
-      | Some _ -> return failf "variable %s is already in scope" varName }   
+      return! match findVarByOriginalName ty s with
+              | None -> introduceVariable ty varName |>> List.singleton
+              | Some _ -> failf "variable %s is already in scope" varName }   
 
 let convertAssignment varName expr = scope {
-      let! e' =  convertExpr expr <!> getState 
-      let! found = findVarByOriginalName varName <!> getState 
-      return match found with
+      let! s = getState
+      let e' =  convertExpr expr s
+      return match findVarByOriginalName varName s with
              | Some {ty = t1} when t1 <> (getType e') -> failf "variable %s has type %A, but expected %A" varName t1 e'
              | None -> failf "variable %s is not in scope" varName
              | (Some v) -> [(v,e') |> Assignment]}
@@ -151,23 +150,25 @@ let rec convertStatement (sgn: ASTSignature) = function
                  | _ -> failf "return %A didn't match expected %A" r sgn.returnTy
   
   | Parser.Declaration (t,o) -> convertDeclaration t o            
-  | Parser.Execution e -> getState |>> (convertExpr e >> Execution) |>> List.singleton
+  | Parser.Execution e -> getState |>> (convertExpr e >> Execution >> List.singleton)
   
   | Parser.Assignment (o,e) -> convertAssignment o e
             
   //I need to ensure the scope is restored after popping out of the body
   | Parser.IfStat (e,stats) -> convertControlStruct 
-                                 (convertStatement sgn) 
                                  convertExpr
-                                 (IfStat >> List.singleton)
                                  e 
+                                 (convertStatement sgn) 
                                  stats
+                                 IfStat
+                           |>> List.singleton
   | Parser.While (e, stats) -> convertControlStruct
-                                (convertStatement sgn)
-                                convertExpr
-                                (While >> List.singleton)
-                                e
-                                stats
+                                 convertExpr
+                                 e
+                                 (convertStatement sgn)
+                                 stats
+                                 While
+                           |>> List.singleton
   |Parser.DeclAndAssign (ty, v, e) -> scope {
       let! decl = convertDeclaration ty v
       let! assign = convertAssignment v e 
