@@ -54,11 +54,11 @@ let rec flattenExpression = function
       handleArith AddI flattenExpression x y
   | ASTFunc ({name = MinusName; argTys = [IntTy;IntTy]}, [x;y]) -> 
       handleArith SubI flattenExpression x y
-  | ASTFunc (s,[]) -> state {
+  | ASTFunc (s,args) -> state {
+    let! args = mapM flattenExpression args
     let! rtnVar = makeVariable
-    yield CallI (rtnVar, LabelName s.name, [])
+    yield CallI (rtnVar, LabelName s.name, args)
     return rtnVar |> VarAtom }
-  | ASTFunc (s, x::xs) ->  failf "no function arguments yet"
 
 let getGuardVar = flattenExpression
               >=> function 
@@ -80,7 +80,7 @@ let rec flattenStatement = function
       let! skipIf = makeNamePre "if_lab" |>> LabelName
       yield CmpI (guardVar, IntLitAtom 0)
       yield JnzI skipIf
-      do! mapMUnit flattenStatement body 
+      do! mapU flattenStatement body 
       yield LabelI skipIf
       return () }
   | While (guard, body) -> state {
@@ -90,7 +90,7 @@ let rec flattenStatement = function
       yield LabelI startLab
       yield CmpI (guardVar, IntLitAtom 0)
       yield JnzI endLab
-      do! mapMUnit flattenStatement body
+      do! mapU flattenStatement body
       yield JmpI startLab
       yield LabelI endLab }
     
@@ -99,7 +99,7 @@ let flattenFunc fs n =
     uniqueNum = n
     instructs = []
   }
-  let work = mapMUnit flattenStatement fs.body
+  let work = mapU flattenStatement fs.body
   exec work init
 
 let flattenModule fs (scope:Scope) = 

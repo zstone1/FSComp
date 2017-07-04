@@ -211,7 +211,7 @@ module State =
 
     let inline mapM f x = sequence (List.map f x)
 
-    let inline mapMUnit (f:'a -> State<unit,'c>) x = sequence (List.map f x) |>> ignore
+    let inline mapU (f:'a -> State<unit,'c>) x = sequence (List.map f x) |>> ignore
         
 
 

@@ -13,11 +13,11 @@ let main argv =
   try
     let prgm = @" 
     public int main(){
-      int y = other();
+      int y = other(5);
       return y;
     }
-    public int other() {
-      return 5;
+    public int other(int x) {
+      return x + 2;
     } 
    "
     let p = prgm 

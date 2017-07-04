@@ -95,6 +95,14 @@ let saveRegisters = state {
     do! modifyRsp (-1 * rspMod)})
 }
 
+let passArgsByConvention = function 
+  | [] -> state { return empty }
+  | [x] -> state {
+      let! loc = getLoc x <!> getState
+      yield MovA (Reg RDI, loc)
+      return empty }
+  | _ -> failf "only one arg"
+
 let alignRsp = state {
   let! modifier = (fun i -> i.rspMod) <!> getState
   match modifier % 16 with 
@@ -109,11 +117,13 @@ let alignRsp = state {
 }
 
 ///Predlude for calling functions. Returns the coressponding epilogue
-let callPrologue = state {
+let callPrologue args = state {
   let! restoreRegisters = saveRegisters
+  let! undoArgPass = passArgsByConvention args
   let! restoreRsp = alignRsp
   return state {
     do! restoreRsp
+    do! undoArgPass
     do! restoreRegisters
   }
 }
@@ -142,16 +152,26 @@ let assignInstruct = function
   | LabelI l -> state { yield LabelA l }
   | AddI (a,b) -> handleArithWithRax AddA a b
   | SubI (a,b) -> handleArithWithRax SubA a b
-  | CallI (v, l, []) -> state {
-    let! callEpilogue = callPrologue
-    yield CallA l 
-    let! rtnLoc = assignLocOnStack v
-    yield MovA (rtnLoc, Reg RAX)
-    do! callEpilogue }
-  | CallI _ -> failf "no args yet"
+  | CallI (v, l, args) when args.Length < 2 -> state {
+      let! callEpilogue = callPrologue args
+      yield CallA l 
+      let! rtnLoc = assignLocOnStack v
+      yield MovA (rtnLoc, Reg RAX)
+      do! callEpilogue }
+  | CallI _ -> failf "only one arg so far"
+
+let handleArgs = function 
+  | {ASTSignature.args = [] } -> empty
+  | {ASTSignature.args = [x]} -> state {
+      let! loc = assignLocOnStack (VarName x.name)
+      yield MovA (loc, Reg RDI) }
+  | {ASTSignature.args = xs } -> failf "signature has too many args"
+  
+
 
 let assign (s: ASTSignature, xs) = 
-  let work = mapMUnit assignInstruct xs
+  let work = handleArgs s 
+          *> mapU assignInstruct xs
   let init = {
     stackDepth = 0
     rspMod = 0

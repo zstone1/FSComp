@@ -113,43 +113,46 @@ module endToEnd =
     result.ExitCode
 
   let execute = executeInDir TestContext.CurrentContext.Test.Name 
-  [<Test>]
-  let simplest () = 
-    Assert.AreEqual(5,@"public int main(){
-           int y = 5;
-           return y;
-       }" |> execute)
+
+  let check i s = Assert.AreEqual( i, s |> execute)
 
   [<Test>]
-  let ``simple adding`` () = 
-    Assert.AreEqual(4,@"public int main(){
+  let simplest () = check 5 @"
+       public int main(){
+           int y = 5;
+           return y;
+       }"
+
+  [<Test>]
+  let ``simple adding`` () = check 4 @"
+       public int main(){
            int y;
            y = 2 + 2;
            return y;
-       }" |> execute)
+       }" 
   [<Test>]
-  let ``simple if`` () = 
-   Assert.AreEqual(2,@"public int main(){
+  let ``simple if`` () = check 2 @"
+          public int main(){
           int x = 1;
           if(x)
           {
             return 1;
           }
           return 2;
-     }" |> execute)
+     }"
   [<Test>]
-  let ``simple if skip`` () = 
-    Assert.AreEqual(1,@"public int main(){
+  let ``simple if skip`` () = check 1 @"
+      public int main(){
           int x = 0;
           if(x)
           {
             return 1;
           }
           return 2;
-     }" |> execute)
+     }"
   [<Test>]
-  let ``Add a lot`` () = 
-    Assert.AreEqual(40,@"public int main(){
+  let ``Add a lot`` () = check 40 @"
+     public int main(){
          int x = 0;
          x = x + 2;
          x = x + 2;
@@ -172,39 +175,39 @@ module endToEnd =
          x = x + 2;
          x = x + 2;
          return x;
-    }" |> execute) 
+    }"
   [<Test>]
-  let ``NestedAdd`` () = 
-    Assert.AreEqual(12,@"public int main(){
+  let ``NestedAdd`` () = check 12 @"
+    public int main(){
          int x = (((((2 + 2) + 2) + 2) + 2) + 2);
          return x;
-    }" |> execute) 
+    }"
   [<Test>]
-  let ``NestedAddReverse`` () = 
-    Assert.AreEqual(12,@"public int main(){
+  let ``NestedAddReverse`` () = check 12 @"
+    public int main(){
          int x = (2 + (2 + (2 + (2 + (2 + 2)))));
          return x;
-    }" |> execute) 
+    }"  
   [<Test>]
-  let ``add variables`` () = 
-    Assert.AreEqual(17,@"public int main(){
+  let ``add variables`` () = check 17 @"
+    public int main(){
          int x = 3;
          x = x + x;
          int y = x + 5;
          y = x + y;
          return y;
-    }" |> execute) 
+    }" 
 
   [<Test>]
-  let ``sub and add`` () = 
-    Assert.AreEqual(2, @"public int main() {
-      int x = 1 - 2 + 3;
-      return x;
-      }" |> execute)
+  let ``sub and add`` () = check 2 @"
+    public int main() {
+        int x = 1 - 2 + 3;
+        return x;
+    }"
 
   [<Test>]
-  let ``while with terminator`` () = 
-    Assert.AreEqual(2, @" public int main(){
+  let ``while with terminator`` () =check 2 @" 
+    public int main(){
         int terminate = 0;
         int i = 10;
         while (terminate){
@@ -214,24 +217,41 @@ module endToEnd =
           }
         }
         return i;
-    }" |> execute)
+    }"
   [<Test>]
-  let ``call no args`` () = 
-    Assert.AreEqual(5, @" 
+  let ``call no args`` () = check 5 @" 
     public int main(){
       int y = other();
       return y;
     }
     public int other() {
       return 5;
-    } " |> execute)
+    } " 
   [<Test>]
-  let ``call no args 2`` () = 
-    Assert.AreEqual(7, @" 
+  let ``call no args 2`` () = check 7 @" 
     public int main(){
       int y = 2 + other();
       return y;
     }
     public int other() {
       return 5;
-    } " |> execute)
+    } " 
+  [<Test>]
+  let ``call one arg`` () = check 7 @"
+    public int main(){
+      int x = foo();
+      int y = bar(x);
+      return y + x;
+    } 
+
+    public int foo(){
+      return 2;
+    }
+    
+    public int bar(int asdf){
+      int x = asdf + 3;
+      return x;
+    }
+
+  
+  "

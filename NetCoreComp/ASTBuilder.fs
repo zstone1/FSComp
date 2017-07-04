@@ -44,7 +44,6 @@ type ASTStatement =
   | Assignment of ASTVariable * ASTExpression
   | While of ASTExpression * ASTStatement list
 
-
 type ASTSignature = {
   access : Access
   returnTy : Ty
@@ -155,19 +154,9 @@ let rec convertStatement (sgn: ASTSignature) = function
   | Parser.Assignment (o,e) -> convertAssignment o e
             
   //I need to ensure the scope is restored after popping out of the body
-  | Parser.IfStat (e,stats) -> convertControlStruct 
-                                 convertExpr
-                                 e 
-                                 (convertStatement sgn) 
-                                 stats
-                                 IfStat
+  | Parser.IfStat (e,stats) -> convertControlStruct convertExpr e (convertStatement sgn) stats IfStat
                            |>> List.singleton
-  | Parser.While (e, stats) -> convertControlStruct
-                                 convertExpr
-                                 e
-                                 (convertStatement sgn)
-                                 stats
-                                 While
+  | Parser.While (e, stats) -> convertControlStruct convertExpr e (convertStatement sgn) stats While
                            |>> List.singleton
   |Parser.DeclAndAssign (ty, v, e) -> scope {
       let! decl = convertDeclaration ty v
@@ -177,16 +166,9 @@ let rec convertStatement (sgn: ASTSignature) = function
 
 let convertFunction ({signature = sgn; body = body }:ParserFunction) = scope {
   let! sgn' = convertSignature sgn
-  let! uniqueNum = (fun i -> i.uniqueNum) <!> getState
-  let! funcs = (fun i -> i.functions) <!> getState
-  let scopeInit = {
-    uniqueNum = uniqueNum
-    variables = sgn'.args 
-    functions = funcs
-  }
+  let! scopeInit = (fun s -> {s with variables = sgn'.args})  <!> getState
   do! putState scopeInit
   let! body' = mapM (convertStatement sgn') body |>> List.collect id
-  let! s = getState
   return {signature = sgn'; body = body';}
 }
 
