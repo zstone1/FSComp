@@ -10,7 +10,7 @@ type Register =
 
 type Location = 
   | Reg of Register
-  | Stack of int
+  | Stack of int (*base dist*) * int (*rspMod*)
   | Imm of int
 
 
@@ -32,6 +32,7 @@ type AssignSt = {
     ainstructs : Instruction list
     locations : Map<string, Location>
     stackDepth : int
+    rspMod : int
     rtnLabName : string
     callLabName : string
 }
@@ -62,6 +63,14 @@ let incrementStackDepth = state{
     return nextStackLoc
 }
 
+let assignLocOnStack var = state {
+  let! pos = incrementStackDepth
+  let! modifier = (fun i -> i.rspMod) <!> getState
+  let loc = Stack (pos, modifier)
+  do! assignLoc var loc
+  return loc
+}
+
 let handleArithWithRax instr a b = state {
       let! s = getState
       let aloc = getLoc a s 
@@ -71,18 +80,6 @@ let handleArithWithRax instr a b = state {
       yield instr (Reg RAX, bloc)
       yield MovA (aloc, Reg RAX) }
 
-/// calling convention requires stack point to be a 
-/// an 8%16 position before executing a call. 
-/// Returns the work required to undo this.
-let ensureRspAt8BitRegister = state {
-  let! s = getState 
-  match s.stackDepth % 16 with
-  | 0 -> yield SubA (Reg RSP, Imm 8)
-         return state { yield AddA (Reg RSP, Imm 8) }
-  | 8 -> return empty
-  | _ -> return failf "oh god registers are horribly unaligned"
-} 
-
 let saveRegisters = state {
   yield PushA (RAX)
   return (state {yield PopA RAX})
@@ -90,12 +87,8 @@ let saveRegisters = state {
 
 ///Predlude for calling functions. Returns the coressponding epilogue
 let callPrologue = state {
-  let! restoreRegisters = saveRegisters
-  let! undoStackPad = ensureRspAt8BitRegister
-  return state {
-    do! undoStackPad
-    do! restoreRegisters
-  }
+  //let! restoreRegisters = saveRegisters
+  return empty
 }
 
 let assignInstruct = function
@@ -109,9 +102,7 @@ let assignInstruct = function
       yield MovA (Reg RAX, valLoc)
       let! setLoc = match tryGetLoc (VarName s) st with
                     | Some s -> s |> returnM
-                    | None -> state { let! l = incrementStackDepth
-                                      do! assignLoc s (Stack l)
-                                      return (Stack l)}
+                    | None -> assignLocOnStack s 
       yield MovA (setLoc, Reg RAX) }
   | JNZI l -> state { yield JnzA l }
   | JmpI l -> state { yield JmpA l }
@@ -121,18 +112,14 @@ let assignInstruct = function
       yield MovA (Reg RAX, rtnLoc)
       yield JmpA (label |> LabelName)
    }
-
-//  | ReturnI s -> state {
-//      let! loc =  getLoc s <!> getState
-//      yield MovA (Reg RDI, loc)
-//      yield MovA (Reg RAX, Imm 60)
-//      yield SyscallA }
   | LabelI l -> state { yield LabelA l }
   | AddI (a,b) -> handleArithWithRax AddA a b
   | SubI (a,b) -> handleArithWithRax SubA a b
-  | CallI (rtn, l, []) -> state {
+  | CallI ((VarName n), l, []) -> state {
     let! callEpilogue = callPrologue
     yield CallA l 
+    let! rtnLoc = assignLocOnStack n
+    yield MovA (rtnLoc, Reg RAX)
     do! callEpilogue }
   | CallI _ -> failf "no args yet"
 
@@ -140,6 +127,7 @@ let assign (s: ASTSignature, xs) =
   let work = mapMUnit assignInstruct xs
   let init = {
     stackDepth = 0
+    rspMod = 0
     ainstructs = []
     locations = Map.empty
     rtnLabName = s.name + "_rtn"

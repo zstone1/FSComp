@@ -182,10 +182,11 @@ let rec convertStatement (sgn: ASTSignature) = function
 let convertFunction ({signature = sgn; body = body }:ParserFunction) = scope {
   let! sgn' = convertSignature sgn
   let! uniqueNum = (fun i -> i.uniqueNum) <!> getState
+  let! funcs = (fun i -> i.functions) <!> getState
   let scopeInit = {
     uniqueNum = uniqueNum
     variables = sgn'.args 
-    functions = hardCodedFunctions
+    functions = funcs
   }
   do! putState scopeInit
   let! body' = mapM (convertStatement sgn') body |>> List.collect id

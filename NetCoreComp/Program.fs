@@ -11,11 +11,17 @@ open Assignment
 [<EntryPoint>]
 let main argv =
   try
-    let prgm = @" public int main(){
-        int x = 5;
+    let prgm = @" 
+    public int main(){
+        int x =  other();
         int y = x + 6;
         return y;
-   }"
+    }
+    
+    public int other(){
+        return 10;
+    }
+    "
     let p = prgm 
          |> parseProgram 
          |> convertModule

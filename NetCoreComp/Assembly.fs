@@ -11,10 +11,12 @@ type AssemblyState = {
   rspOffset : int
 }
 
+let getDepthWithOffset st = st.stackDepth + (st.stackDepth - 8) % 16
+
 let serializeLocation stackDepth = function 
   | Reg x -> (sprintf "%A" x).ToLowerInvariant()
   | Imm (i) -> i.ToString()
-  | Stack i -> stackDepth - i |> sprintf "qword [rsp + %i]" //stackgrowsdown.com
+  | Stack (b, modifier) -> (stackDepth + modifier) - b |> sprintf "qword [rsp + %i]" //stackgrowsdown.com
 
 let serializeInstruction st = 
   let serialize = serializeLocation st
@@ -38,14 +40,14 @@ let serializeInstruction st =
 
 
 let intro st = [LabelA (st.callLabName |> LabelName);
-                SubA (Reg RSP, Imm st.stackDepth)]
+                SubA (Reg RSP, Imm (getDepthWithOffset st))]
 let outro st = [LabelA (st.rtnLabName |> LabelName);
-                AddA (Reg RSP, Imm st.stackDepth);
+                AddA (Reg RSP, Imm (getDepthWithOffset st));
                 RetA]
 
 let funcToInstructions (s: ASTSignature, st : AssignSt) = 
   intro st @ st.ainstructs @ outro st 
-  |> List.map (serializeInstruction st.stackDepth)
+  |> List.map (serializeInstruction (getDepthWithOffset st))
   |> String.concat "\n"
 
 let handlerBody = 
