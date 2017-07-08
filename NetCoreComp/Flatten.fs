@@ -11,6 +11,7 @@ type Variable = VarName of string
 
 type Atom = 
   | IntLitAtom of int
+  | DataRefAtom of string
   | VarAtom of Variable
 
 type Instruct = 
@@ -28,6 +29,7 @@ type Instruct =
 type InterSt = {
   uniqueNum : int
   instructs : Instruct list
+  stringLits : (string * string) list
 }
 
 type StateBuilder with 
@@ -49,13 +51,18 @@ let handleArith arith flatten x y = state {
     return xVar |> VarAtom}
 
 let rec flattenExpression = function
-  | ASTLit i -> i |> IntLitAtom |> returnM
+  | ASTIntLit i -> i |> IntLitAtom |> returnM
+  | ASTStringLit str -> state {
+      let! name = makeNamePre "str"
+      do! updateStateU (fun s -> {s with stringLits = (name, str) :: s.stringLits })
+      return DataRefAtom name
+    }
   | ASTVar v -> v.name |> VarName |> VarAtom |> returnM
-  | ASTFunc ({name = PlusName; argTys = [IntTy;IntTy]}, [x;y]) ->
+  | ASTFunc ({name = PlusName; argTys = Some [IntTy;IntTy] }, [x;y]) ->
       handleArith AddI flattenExpression x y
-  | ASTFunc ({name = MinusName; argTys = [IntTy;IntTy]}, [x;y]) -> 
+  | ASTFunc ({name = MinusName; argTys = Some [IntTy;IntTy]}, [x;y]) -> 
       handleArith SubI flattenExpression x y
-  | ASTFunc ({name = MultName; argTys = [IntTy; IntTy]}, [x;y]) ->
+  | ASTFunc ({name = MultName; argTys = Some [IntTy; IntTy]}, [x;y]) ->
       handleArith IMulI flattenExpression x y
   | ASTFunc (s,args) -> state {
     let! args = mapM flattenExpression args
@@ -101,13 +108,15 @@ let flattenFunc fs n =
   let init = {
     uniqueNum = n
     instructs = []
+    stringLits = []
   }
   let work = mapU flattenStatement fs.body
   exec work init
 
+type FlattenedModule = {funcs : (ASTSignature * (Instruct list)) list; lits : (string * string) list}
 let flattenModule fs (scope:Scope) = 
   let seed = scope.uniqueNum
-  let accum (acc,i) f =
-     let {instructs = l; uniqueNum = i'} = flattenFunc f i
-     ((f.signature,l) :: acc, i')
-  List.fold accum ([],scope.uniqueNum) fs
+  let accum ({funcs = accfuncs; lits = acclits},i) f =
+     let {instructs = l; uniqueNum = i'; stringLits = lits} = flattenFunc f i
+     ({funcs = (f.signature,l) :: accfuncs; lits =  lits @ acclits}, i')
+  List.fold accum ({funcs = []; lits = []},scope.uniqueNum) fs

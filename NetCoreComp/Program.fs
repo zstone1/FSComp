@@ -13,7 +13,9 @@ let main argv =
   try
     let prgm = @" 
       public int main(){
-        return ((-2)*4) + 10 ;
+        string s = ""sup nerds.\nI've got a %i."";
+        printf(s,2);
+        return 1;
       }"
     let p = prgm 
          |> parseProgram 

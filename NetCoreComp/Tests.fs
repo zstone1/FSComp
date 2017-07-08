@@ -108,7 +108,7 @@ module endToEnd =
     do System.IO.Directory.CreateDirectory("/home/zach/cmp/TestOutput/" + testDir) |> ignore
     do System.IO.File.WriteAllText(testOutputDir + testDir + "/test1.asm", p)
     use assemble = proc "nasm" " -felf64 \"test1.asm\" -o \"Foo.o\""
-    use link = proc "ld" "Foo.o -o Foo.out "
+    use link = proc "gcc" "Foo.o -o Foo.out "
     use result = proc "./Foo.out" ""
     result.ExitCode
 

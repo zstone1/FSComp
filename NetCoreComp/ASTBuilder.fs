@@ -4,7 +4,7 @@ open Parser
 open FSharpx.State
 open FSharpx
 
-type Ty = IntTy
+type Ty = IntTy | StringTy
 type Access = Public | Private
 
 type ASTVariable = {
@@ -16,7 +16,7 @@ type ASTVariable = {
 type ASTFuncRef = {
   ty : Ty
   name : string
-  argTys : Ty list
+  argTys : Ty list option
 }
 
 type Scope = {
@@ -30,7 +30,8 @@ let scope = state
 
 
 type ASTExpression =
- | ASTLit of int
+ | ASTIntLit of int
+ | ASTStringLit of string
  | ASTVar of ASTVariable
  | ASTFunc of ASTFuncRef * (ASTExpression list)
 
@@ -57,13 +58,17 @@ type ASTFunction = {
 }
 
 let getType = function
-  | ASTLit _ -> IntTy
+  | ASTIntLit _ -> IntTy
+  | ASTStringLit _ -> StringTy
   | ASTVar {ty = t} -> t
   | ASTFunc (t,_) -> t.ty
 
 let findVarByOriginalName vorigninal scope = List.tryFind (fun {originalName = n} -> n = vorigninal) scope.variables
 
-let findFunction name args scope = List.tryFind (fun ref -> args = ref.argTys && ref.name = name) scope.functions
+let findFunction name args scope = 
+  let funcMatch (ref: ASTFuncRef) = ref.name = name 
+                                 && match ref.argTys with | None -> true | Some a -> a = args
+  List.tryFind funcMatch scope.functions
 
 
 let parseAccess = function
@@ -73,6 +78,7 @@ let parseAccess = function
   
 let parseTy = function
   | "int" -> IntTy
+  | "string" -> StringTy
   | x -> failf "fail to parse type %s" x
   
 let uniqify originalName = scope {
@@ -94,14 +100,16 @@ let convertSignature (s: FuncSignature) = scope {
 }
 
 let hardCodedFunctions = [
-  {ty = IntTy; name = PlusName; argTys = [IntTy; IntTy]};
-  {ty = IntTy; name = MinusName; argTys = [IntTy; IntTy]};
-  {ty = IntTy; name = MultName; argTys = [IntTy; IntTy]};
+  {ty = IntTy; name = PlusName; argTys = [IntTy; IntTy] |> Some};
+  {ty = IntTy; name = MinusName; argTys = [IntTy; IntTy] |> Some};
+  {ty = IntTy; name = MultName; argTys = [IntTy; IntTy] |> Some};
+  {ty = IntTy; name = "printf"; argTys = None}
 ]
 
 let rec convertExpr e scope = 
   match e with
-  | IntLit x -> ASTLit x
+  | IntLit x -> ASTIntLit x
+  | StringLit s -> ASTStringLit s
   | Variable original as x -> 
     findVarByOriginalName original scope 
     |> function | Some v -> ASTVar v
@@ -177,7 +185,7 @@ let getFuncsInModule (fs :ParserFunction list) =
   let getRef {ParserFunction.signature = s} = {
     ty = parseTy s.returnTy
     name = s.name
-    argTys = List.map (parseTy << fst) s.args
+    argTys = List.map (parseTy << fst) s.args |> Some
   }
   List.map getRef fs
 

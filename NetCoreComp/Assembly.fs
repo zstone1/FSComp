@@ -16,6 +16,7 @@ let getDepthWithOffset st = st.stackDepth + (st.stackDepth - 8) % 16
 let serializeLocation stackDepth = function 
   | Reg x -> (sprintf "%A" x).ToLowerInvariant()
   | Imm (i) -> i.ToString()
+  | Data s -> s
   | Stack { distFromBase = b; currentRspMod = modifier} ->
        (stackDepth + modifier) - b |> sprintf "qword [rsp + %i]" //stackgrowsdown.com
 
@@ -52,23 +53,16 @@ let funcToInstructions (s: ASTSignature, st : AssignSt) =
   |> List.map (serializeInstruction (getDepthWithOffset st))
   |> String.concat "\n"
 
-let handlerBody = 
-  [
-    LabelA ("_start" |> LabelName)
-    SubA (Reg RSP, Imm 8)
-    CallA ("main" |> LabelName)
-    AddA (Reg RSP, Imm 8)
-    MovA (Reg RDI, Reg RAX)
-    MovA (Reg RAX, Imm 60)
-    SyscallA
-  ]
+let escapeString = function 
+  | '\n' -> "\\n" 
+  | '\t' -> "\\t"
+  | '\r' -> "\\r"
+  | c -> c.ToString()
 
-let serializeModule fs = 
-
-  match fs with
-  | [] -> failf "no functions?"
-  | xs -> let prgm = List.map funcToInstructions xs
-          let handler = List.map (serializeInstruction 0) handlerBody
-          let initialize = "        global _start\n        section .text"
-          initialize :: handler @ prgm |> String.concat "\n"
+let toDataLabel (lab, s) = sprintf "%s:\n        db     `%s`, 10, 0" lab (String.collect escapeString s)
+let serializeModule {funcInstructions = fs; dataLits = l} = 
+  let prgm = fs |> List.map funcToInstructions 
+  let data = l |> List.map toDataLabel 
+  let initialize = "        global main\n        extern printf\n        section .text"
+  initialize :: prgm @ data |> String.concat "\n"
           

@@ -4,6 +4,7 @@ open FParsec.CharParsers
 open System
 
 type PExpression =
+ | StringLit of string
  | IntLit of int
  | Variable of string
  | Func of string * (PExpression list)
@@ -56,6 +57,16 @@ opp.AddOperator(arithHelper "*" 2)
 let expr = 
    let parseInt = pint32 .>> spaces |>> IntLit
    let parseVariable = parseName |>> Variable
+   let parseString =
+     let normal = satisfy (fun c -> c <>'\\' && c <> '"')
+     let unescapeChar = function
+        | 'n' -> '\n' 
+        | 'r' -> '\r'
+        | 't' -> '\t'
+        |  c  ->  c
+     let escaped = pstring "\\" >>. (anyOf "\\nrt\"" |>> unescapeChar)
+     let strChar = (manyChars (normal <|> escaped))
+     between (pstring "\"") (tok "\"") strChar |>> StringLit
    let parseFunc = parse { 
      let! name = parseName
      let! args = betweenParens <| sepBy parseExpression (tok ",") 
@@ -65,6 +76,7 @@ let expr =
    attempt parsensExpr   <|>
    attempt parseInt      <|> 
    attempt parseFunc     <|> 
+   attempt parseString   <|>
    attempt parseVariable <?> 
    "Failed to parse expression"
 opp.TermParser <- expr

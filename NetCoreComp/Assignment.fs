@@ -16,6 +16,7 @@ type Register =
 type StackPosition = {distFromBase : int; currentRspMod : int}
 type Location = 
   | Reg of Register
+  | Data of string
   | Stack of StackPosition 
   | Imm of int
 
@@ -55,6 +56,7 @@ type StateBuilder with
 let tryGetLoc a st = 
   match a with 
   | IntLitAtom i -> Imm i |> Some
+  | DataRefAtom s -> Data s |> Some
   | VarAtom n -> 
       match Map.tryFind n st.locations with 
       | None -> None
@@ -100,6 +102,7 @@ let passArgsByConvention (SplitAt 6 (l, r)) = state {
       yield PushA RAX
     }               
     do! r |> List.rev |> mapU putArgOnStack
+    yield MovA (Reg RAX, Imm 0)
     return state {
       do! modifyRsp (-8 * r.Length)
       yield AddA (Reg RSP, ( Imm (8*r.Length)))
@@ -208,7 +211,8 @@ let assign (s: ASTSignature, xs) =
   }
   (s, exec work init)
 
-let assignModule xss = List.map assign xss
+type AssignedModule = {funcInstructions : (ASTSignature * AssignSt) list; dataLits : (string * string) list }
+let assignModule {funcs = xss; lits = l} = {funcInstructions = List.map assign xss; dataLits = l}
 
 
 
