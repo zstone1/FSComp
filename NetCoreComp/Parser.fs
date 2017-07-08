@@ -51,6 +51,7 @@ let parseExpression = opp.ExpressionParser;
 let arithHelper s p = InfixOperator(s, spaces, p, Associativity.Left, fun x y -> Func ("_" + s,[x;y]))
 opp.AddOperator(arithHelper "-" 1)
 opp.AddOperator(arithHelper "+" 1)
+opp.AddOperator(arithHelper "*" 2)
 
 let expr = 
    let parseInt = pint32 .>> spaces |>> IntLit

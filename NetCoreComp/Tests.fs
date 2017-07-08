@@ -114,7 +114,11 @@ module endToEnd =
 
   let execute = executeInDir TestContext.CurrentContext.Test.Name 
 
-  let check i s = Assert.AreEqual( i, s |> execute)
+  let check i s = 
+    try 
+      Assert.AreEqual( i, s |> execute)
+    with 
+      | CompilerError e -> Assert.Fail("Compilation failed: " + e)
 
   [<Test>]
   let simplest () = check 5 @"
@@ -269,7 +273,7 @@ module endToEnd =
   [<Test>]
   let ``call with 6 args`` () = check 21 @"
       public int main(){
-        let x = 1;
+        int x = 1;
         return x + foo(1,1,2,3,5,8);
       }
       

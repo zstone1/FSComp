@@ -13,17 +13,8 @@ let main argv =
   try
     let prgm = @" 
       public int main(){
-        int x = 1;
-        int y = foo(0,0,0,0,0,0,0,10);
-        return x+y;
-      }
-      
-      public int foo(int a, int b, int c, int d, int e, int f, int g, int h){
-        if(g+1){
-          return 0;
-        }
-        return h;
-      }" 
+        return ((-2)*4) + 10 ;
+      }"
     let p = prgm 
          |> parseProgram 
          |> convertModule
@@ -37,21 +28,3 @@ let main argv =
     1
   with 
   | exn -> printfn "fail with: %A" exn; 1
-(*
-    try
-        let prgm = @" public int main(){
-            if(1)
-            {
-              int y;
-              y = 3;
-            };
-            int y;
-            y = 4;
-            return y;
-        }" 
-        let p = prgm |> parseProgram |> convertModule
-        do printf "%A" p
-        1
-    with 
-        exn -> printf "%A" exn; 1
-        *)

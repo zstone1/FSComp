@@ -31,6 +31,7 @@ type Instruction =
   | LabelA of LabelMarker
   | AddA of Location * Location
   | SubA of Location * Location
+  | IMulA of Location * Location
   | CallA of LabelMarker
   | PushA of Register
   | PopA of Register
@@ -83,18 +84,9 @@ let assignLocOnStack var = state {
   return! getLoc (VarAtom var) <!> getState
 }
 
-let handleArithWithRax instr a b = state {
-      let! s = getState
-      let aloc = getLoc (VarAtom a) s 
-      yield MovA (Reg RAX, aloc)
-      let bloc = getLoc b s
-      yield instr (Reg RAX, bloc)
-      yield MovA (aloc, Reg RAX) }
-
 let callingRegs = [RDI;RSI; RDX;RCX; R8; R9] 
 
-let passArgsByConvention = function
-  | SplitAt 6 (l, r) -> state {
+let passArgsByConvention (SplitAt 6 (l, r)) = state {
     let! regPass = l 
                 |> mapM (fun i -> getLoc i <!> getState)
                |>> Seq.zip (Reg <@> callingRegs)
@@ -149,7 +141,17 @@ let callPrologue args = state {
   }
 }
 
-let assignInstruct = function
+
+let assignInstruct = 
+  let handleArithWithRax instr a b = state {
+      let! s = getState
+      let aloc = getLoc (VarAtom a) s 
+      yield MovA (Reg RAX, aloc)
+      let bloc = getLoc b s
+      yield instr (Reg RAX, bloc)
+      yield MovA (aloc, Reg RAX) }
+
+  function
   | CmpI (a,b) -> state {
       let! l1 = (getLoc (VarAtom a) <!> getState) 
       let! l2 = (getLoc b <!> getState)
@@ -173,6 +175,7 @@ let assignInstruct = function
   | LabelI l -> state { yield LabelA l }
   | AddI (a,b) -> handleArithWithRax AddA a b
   | SubI (a,b) -> handleArithWithRax SubA a b
+  | IMulI (a,b) -> handleArithWithRax IMulA a b
   | CallI (v, l, args) -> state {
       let! callEpilogue = callPrologue args
       yield CallA l 
@@ -180,24 +183,21 @@ let assignInstruct = function
       yield MovA (rtnLoc, Reg RAX)
       do! callEpilogue }
 
-let handleArgs s = 
-  match s.args with 
-  | SplitAt 6 (l,r) -> state {
-      let! loc = mapM (fun (i : ASTVariable) -> assignLocOnStack (VarName i.name)) l
-      yield! loc 
-          |> fun i -> Seq.zip i (Reg <@> callingRegs)
-          |> List.ofSeq
-          |> List.map MovA
+let handleArgs (SplitAt 6 (l,r)) = state {
+  let! loc = mapM (fun (i : ASTVariable) -> assignLocOnStack (VarName i.name)) l
+  yield! loc 
+      |> fun i -> Seq.zip i (Reg <@> callingRegs)
+      |> List.ofSeq
+      |> List.map MovA
 
-      do! r
-       |> List.indexed
-       |> mapU (fun (i,v) -> assignLoc (VarName v.name) (DistFromBase (-8 * (i+1))))
-  }
+  do! r
+   |> List.indexed
+   |> mapU (fun (i,v) -> assignLoc (VarName v.name) (DistFromBase (-8 * (i+1))))
+}
 
 
 let assign (s: ASTSignature, xs) = 
-  let work = handleArgs s 
-          *> mapU assignInstruct xs
+  let work = handleArgs s.args *> mapU assignInstruct xs
   let init = {
     stackDepth = 0
     rspMod = 0

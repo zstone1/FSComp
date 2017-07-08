@@ -23,6 +23,7 @@ type Instruct =
   | LabelI of LabelMarker
   | AddI of Variable * Atom
   | SubI of Variable * Atom
+  | IMulI of Variable * Atom
 
 type InterSt = {
   uniqueNum : int
@@ -54,6 +55,8 @@ let rec flattenExpression = function
       handleArith AddI flattenExpression x y
   | ASTFunc ({name = MinusName; argTys = [IntTy;IntTy]}, [x;y]) -> 
       handleArith SubI flattenExpression x y
+  | ASTFunc ({name = MultName; argTys = [IntTy; IntTy]}, [x;y]) ->
+      handleArith IMulI flattenExpression x y
   | ASTFunc (s,args) -> state {
     let! args = mapM flattenExpression args
     let! rtnVar = makeVariable

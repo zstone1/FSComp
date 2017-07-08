@@ -29,6 +29,7 @@ let serializeInstruction st =
   | MovA (l1,l2) -> handleOp2 "mov" l1 l2
   | AddA (l1,l2) -> handleOp2 "add" l1 l2
   | SubA (l1,l2) -> handleOp2 "sub" l1 l2
+  | IMulA (l1,l2) -> handleOp2 "imul" l1 l2
   | CmpA (l1,l2) -> handleOp2 "cmp" l1 l2
   | JnzA (LabelName l) -> handleOp1 "jnz" l
   | JmpA (LabelName l) -> handleOp1 "jmp" l

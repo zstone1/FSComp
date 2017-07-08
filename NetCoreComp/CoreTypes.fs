@@ -21,3 +21,5 @@ let PlusName = "_+"
 [<Literal>]
 let MinusName = "_-"
 
+[<Literal>]
+let MultName = "_*"

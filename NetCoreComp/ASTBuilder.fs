@@ -96,6 +96,7 @@ let convertSignature (s: FuncSignature) = scope {
 let hardCodedFunctions = [
   {ty = IntTy; name = PlusName; argTys = [IntTy; IntTy]};
   {ty = IntTy; name = MinusName; argTys = [IntTy; IntTy]};
+  {ty = IntTy; name = MultName; argTys = [IntTy; IntTy]};
 ]
 
 let rec convertExpr e scope = 
