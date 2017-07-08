@@ -12,14 +12,13 @@ open Assignment
 let main argv =
   try
     let prgm = @" 
-    public int main(){
-      int y = other(5);
-      return y;
-    }
-    public int other(int x) {
-      return x + 2;
-    } 
-   "
+      public int main(){
+        return foo(1,1,2,3,5,8);
+      }
+      
+      public int foo(int a, int b, int c, int d, int e, int f){
+        return a + b + c + d + e + f;
+      }" 
     let p = prgm 
          |> parseProgram 
          |> convertModule

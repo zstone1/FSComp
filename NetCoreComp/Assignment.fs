@@ -7,6 +7,11 @@ type Register =
   | RAX
   | RDI
   | RSP
+  | RSI
+  | RDX
+  | RCX
+  | R8
+  | R9
 
 type StackPosition = {distFromBase : int; currentRspMod : int}
 type Location = 
@@ -45,6 +50,7 @@ let modifyRsp i = updateStateU (fun s -> {s with rspMod = s.rspMod + i})
 
 type StateBuilder with 
   member x.Yield(i) = updateStateU (fun s -> {s with ainstructs = s.ainstructs @ [i]})
+  member x.YieldFrom(xs) = mapU x.Yield xs 
 let tryGetLoc a st = 
   match a with 
   | IntLitAtom i -> Imm i |> Some
@@ -85,23 +91,35 @@ let handleArithWithRax instr a b = state {
       yield instr (Reg RAX, bloc)
       yield MovA (aloc, Reg RAX) }
 
-let saveRegisters = state {
-  let callerSaveRegs = [RAX; RDI]
+let callingRegs = [RDI;RSI; RDX;RCX; R8; R9] 
+
+let passArgsByConvention = function
+  | SplitAt 6 (l, r) -> state {
+    let! regPass = l 
+                |> mapM (fun i -> getLoc i <!> getState)
+               |>> Seq.zip (Reg <@> callingRegs)
+               |>> Seq.map MovA
+               |>> Seq.toList
+    yield! regPass
+    let putArgOnStack l = state {
+      let! loc = getLoc l <!> getState
+      yield MovA (Reg RAX, loc)
+      do! modifyRsp 8
+      yield PushA RAX
+    }               
+    do! r |> List.rev |> mapU putArgOnStack
+    return state {do! modifyRsp (-8 * r.Length)}
+  }
+
+let saveRegisters i = state {
+  let callerSaveRegs = RAX :: (List.take i callingRegs)
   let rspMod = (List.length callerSaveRegs * 8)
   do! modifyRsp rspMod
-  for r in callerSaveRegs do yield PushA r
+  for r in callerSaveRegs do yield PushA (r)
   return (state {
     for r in List.rev callerSaveRegs do yield PopA r
     do! modifyRsp (-1 * rspMod)})
 }
-
-let passArgsByConvention = function 
-  | [] -> state { return empty }
-  | [x] -> state {
-      let! loc = getLoc x <!> getState
-      yield MovA (Reg RDI, loc)
-      return empty }
-  | _ -> failf "only one arg"
 
 let alignRsp = state {
   let! modifier = (fun i -> i.rspMod) <!> getState
@@ -118,7 +136,7 @@ let alignRsp = state {
 
 ///Predlude for calling functions. Returns the coressponding epilogue
 let callPrologue args = state {
-  let! restoreRegisters = saveRegisters
+  let! restoreRegisters = saveRegisters (min 6 (List.length args))
   let! undoArgPass = passArgsByConvention args
   let! restoreRsp = alignRsp
   return state {
@@ -152,21 +170,25 @@ let assignInstruct = function
   | LabelI l -> state { yield LabelA l }
   | AddI (a,b) -> handleArithWithRax AddA a b
   | SubI (a,b) -> handleArithWithRax SubA a b
-  | CallI (v, l, args) when args.Length < 2 -> state {
+  | CallI (v, l, args) -> state {
       let! callEpilogue = callPrologue args
       yield CallA l 
       let! rtnLoc = assignLocOnStack v
       yield MovA (rtnLoc, Reg RAX)
       do! callEpilogue }
-  | CallI _ -> failf "only one arg so far"
 
-let handleArgs = function 
-  | {ASTSignature.args = [] } -> empty
-  | {ASTSignature.args = [x]} -> state {
-      let! loc = assignLocOnStack (VarName x.name)
-      yield MovA (loc, Reg RDI) }
-  | {ASTSignature.args = xs } -> failf "signature has too many args"
-  
+let handleArgs s = 
+  match s.args with 
+  | SplitAt 6 (l,r) -> state {
+      let! loc = mapM (fun (i : ASTVariable) -> assignLocOnStack (VarName i.name)) l
+      let moveInstructs = loc 
+                       |> fun i -> Seq.zip i (Reg <@> callingRegs)
+                       |> List.ofSeq
+                       |> List.map MovA
+      yield! moveInstructs
+
+      return failf "Still need to handle stack parameters"
+  }
 
 
 let assign (s: ASTSignature, xs) = 

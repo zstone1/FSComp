@@ -239,19 +239,39 @@ module endToEnd =
   [<Test>]
   let ``call one arg`` () = check 7 @"
     public int main(){
-      int x = foo();
+      int x = 2;
       int y = bar(x);
       return y + x;
     } 
-
-    public int foo(){
-      return 2;
-    }
     
     public int bar(int asdf){
       int x = asdf + 3;
       return x;
-    }
+    }"
 
-  
-  "
+  [<Test>]
+  let ``call one arg three deep`` () = check 23 @"
+    public int main(){
+      int x = 2;
+      int y = bar(x);
+      return y + x;
+    } 
+    
+    public int bar(int asdf){
+      int x = asdf + 3;
+      return x + baz(x);
+    }
+    public int baz(int asdf){
+      int x = asdf + 11;
+      return x;
+    }
+    "
+  [<Test>]
+  let ``call with 6 args`` () = check 20 @"
+      public int main(){
+        return foo(1,1,2,3,5,8);
+      }
+      
+      public int foo(int a, int b, int c, int d, int e, int f){
+        return a + b + c + d + e + f;
+      }"
