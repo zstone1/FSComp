@@ -14,12 +14,15 @@ let main argv =
     let prgm = @" 
       public int main(){
         int x = 1;
-        int y = foo(1,1,2,3,5,8);
+        int y = foo(0,0,0,0,0,0,0,10);
         return x+y;
       }
       
-      public int foo(int a, int b, int c, int d, int e, int f){
-        return a + b + c + d + e + f;
+      public int foo(int a, int b, int c, int d, int e, int f, int g, int h){
+        if(g+1){
+          return 0;
+        }
+        return h;
       }" 
     let p = prgm 
          |> parseProgram 

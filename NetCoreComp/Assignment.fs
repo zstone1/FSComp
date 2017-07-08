@@ -108,11 +108,14 @@ let passArgsByConvention = function
       yield PushA RAX
     }               
     do! r |> List.rev |> mapU putArgOnStack
-    return state {do! modifyRsp (-8 * r.Length)}
+    return state {
+      do! modifyRsp (-8 * r.Length)
+      yield AddA (Reg RSP, ( Imm (8*r.Length)))
+      }
   }
 
-let saveRegisters i = state {
-  let callerSaveRegs = RAX :: (List.take i callingRegs)
+let saveRegisters = state {
+  let callerSaveRegs = [RAX] 
   let rspMod = (List.length callerSaveRegs * 8)
   do! modifyRsp rspMod
   for r in callerSaveRegs do yield PushA (r)
@@ -136,7 +139,7 @@ let alignRsp = state {
 
 ///Predlude for calling functions. Returns the coressponding epilogue
 let callPrologue args = state {
-  let! restoreRegisters = saveRegisters (min 6 (List.length args))
+  let! restoreRegisters = saveRegisters 
   let! undoArgPass = passArgsByConvention args
   let! restoreRsp = alignRsp
   return state {
@@ -181,13 +184,14 @@ let handleArgs s =
   match s.args with 
   | SplitAt 6 (l,r) -> state {
       let! loc = mapM (fun (i : ASTVariable) -> assignLocOnStack (VarName i.name)) l
-      let moveInstructs = loc 
-                       |> fun i -> Seq.zip i (Reg <@> callingRegs)
-                       |> List.ofSeq
-                       |> List.map MovA
-      yield! moveInstructs
+      yield! loc 
+          |> fun i -> Seq.zip i (Reg <@> callingRegs)
+          |> List.ofSeq
+          |> List.map MovA
 
-      return failf "Still need to handle stack parameters"
+      do! r
+       |> List.indexed
+       |> mapU (fun (i,v) -> assignLoc (VarName v.name) (DistFromBase (-8 * (i+1))))
   }
 
 

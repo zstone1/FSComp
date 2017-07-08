@@ -267,9 +267,10 @@ module endToEnd =
     }
     "
   [<Test>]
-  let ``call with 6 args`` () = check 20 @"
+  let ``call with 6 args`` () = check 21 @"
       public int main(){
-        return foo(1,1,2,3,5,8);
+        let x = 1;
+        return x + foo(1,1,2,3,5,8);
       }
       
       public int foo(int a, int b, int c, int d, int e, int f){
