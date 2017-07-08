@@ -13,7 +13,9 @@ let main argv =
   try
     let prgm = @" 
       public int main(){
-        return foo(1,1,2,3,5,8);
+        int x = 1;
+        int y = foo(1,1,2,3,5,8);
+        return x+y;
       }
       
       public int foo(int a, int b, int c, int d, int e, int f){
