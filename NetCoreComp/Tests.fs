@@ -105,37 +105,42 @@ module endToEnd =
          |> fst
          |> assignModule
          |> serializeModule
-    do System.IO.Directory.CreateDirectory("/home/zach/cmp/TestOutput/" + testDir) |> ignore
+    let dir = "/home/zach/cmp/TestOutput/" + testDir
+    do System.IO.Directory.CreateDirectory(dir) |> ignore
     do System.IO.File.WriteAllText(testOutputDir + testDir + "/test1.asm", p)
     use assemble = proc "nasm" " -felf64 \"test1.asm\" -o \"Foo.o\""
     use link = proc "gcc" "Foo.o -o Foo.out "
-    use result = proc "./Foo.out" ""
-    result.ExitCode
+    use result = proc "./Foo.out > result.txt" ""
+    let text = System.IO.File.ReadAllText(dir + "/result.txt")
+    (result.ExitCode, text)
 
   let execute = executeInDir TestContext.CurrentContext.Test.Name 
 
-  let check i s = 
+  let check f i s = 
     try 
-      Assert.AreEqual( i, s |> execute)
+      Assert.AreEqual(i, s |> execute |> f)
     with 
       | CompilerError e -> Assert.Fail("Compilation failed: " + e)
+    
+  let checkCode = check fst
+  let checkOut = check snd
 
   [<Test>]
-  let simplest () = check 5 @"
+  let simplest () = checkCode 5 @"
        public int main(){
            int y = 5;
            return y;
        }"
 
   [<Test>]
-  let ``simple adding`` () = check 4 @"
+  let ``simple adding`` () = checkCode 4 @"
        public int main(){
            int y;
            y = 2 + 2;
            return y;
        }" 
   [<Test>]
-  let ``simple if`` () = check 2 @"
+  let ``simple if`` () = checkCode 2 @"
           public int main(){
           int x = 1;
           if(x)
@@ -145,7 +150,7 @@ module endToEnd =
           return 2;
      }"
   [<Test>]
-  let ``simple if skip`` () = check 1 @"
+  let ``simple if skip`` () = checkCode 1 @"
       public int main(){
           int x = 0;
           if(x)
@@ -155,7 +160,7 @@ module endToEnd =
           return 2;
      }"
   [<Test>]
-  let ``Add a lot`` () = check 40 @"
+  let ``Add a lot`` () = checkCode 40 @"
      public int main(){
          int x = 0;
          x = x + 2;
@@ -181,19 +186,19 @@ module endToEnd =
          return x;
     }"
   [<Test>]
-  let ``NestedAdd`` () = check 12 @"
+  let ``NestedAdd`` () = checkCode 12 @"
     public int main(){
          int x = (((((2 + 2) + 2) + 2) + 2) + 2);
          return x;
     }"
   [<Test>]
-  let ``NestedAddReverse`` () = check 12 @"
+  let ``NestedAddReverse`` () = checkCode 12 @"
     public int main(){
          int x = (2 + (2 + (2 + (2 + (2 + 2)))));
          return x;
     }"  
   [<Test>]
-  let ``add variables`` () = check 17 @"
+  let ``add variables`` () = checkCode 17 @"
     public int main(){
          int x = 3;
          x = x + x;
@@ -203,14 +208,14 @@ module endToEnd =
     }" 
 
   [<Test>]
-  let ``sub and add`` () = check 2 @"
+  let ``sub and add`` () = checkCode 2 @"
     public int main() {
         int x = 1 - 2 + 3;
         return x;
     }"
 
   [<Test>]
-  let ``while with terminator`` () =check 2 @" 
+  let ``while with terminator`` () =checkCode 2 @" 
     public int main(){
         int terminate = 0;
         int i = 10;
@@ -223,7 +228,7 @@ module endToEnd =
         return i;
     }"
   [<Test>]
-  let ``call no args`` () = check 5 @" 
+  let ``call no args`` () = checkCode 5 @" 
     public int main(){
       int y = other();
       return y;
@@ -232,7 +237,7 @@ module endToEnd =
       return 5;
     } " 
   [<Test>]
-  let ``call no args 2`` () = check 7 @" 
+  let ``call no args 2`` () = checkCode 7 @" 
     public int main(){
       int y = 2 + other();
       return y;
@@ -241,7 +246,7 @@ module endToEnd =
       return 5;
     } " 
   [<Test>]
-  let ``call one arg`` () = check 7 @"
+  let ``call one arg`` () = checkCode 7 @"
     public int main(){
       int x = 2;
       int y = bar(x);
@@ -254,7 +259,7 @@ module endToEnd =
     }"
 
   [<Test>]
-  let ``call one arg three deep`` () = check 23 @"
+  let ``call one arg three deep`` () = checkCode 23 @"
     public int main(){
       int x = 2;
       int y = bar(x);
@@ -271,7 +276,7 @@ module endToEnd =
     }
     "
   [<Test>]
-  let ``call with 6 args`` () = check 21 @"
+  let ``call with 6 args`` () = checkCode 21 @"
       public int main(){
         int x = 1;
         return x + foo(1,1,2,3,5,8);
@@ -279,4 +284,19 @@ module endToEnd =
       
       public int foo(int a, int b, int c, int d, int e, int f){
         return a + b + c + d + e + f;
+      }"
+  [<Test>]
+  let ``calling convention 8`` () = checkOut "Args 1 2 3 4 5 6 7 8\n" @" 
+      public int main(){
+        string s = ""Args %i %i %i %i %i %i %i %i"";
+        printf(s,1,2,3,4,5,6,7,8);
+        return 8;
+      }"
+
+  [<Test>]
+  let ``calling conventionVerify 9`` () = checkOut "Args 1 2 3 4 5 6 7 8 9\n" @" 
+      public int main(){
+        string s = ""Args %i %i %i %i %i %i %i %i %i"";
+        printf(s,1,2,3,4,5,6,7,8,9);
+        return 8;
       }"

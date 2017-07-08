@@ -136,9 +136,9 @@ let alignRsp = state {
 let callPrologue args = state {
   let! restoreRegisters = saveRegisters 
   let! undoArgPass = passArgsByConvention args
-  let! restoreRsp = alignRsp
+//  let! restoreRsp = //alignRsp
   return state {
-    do! restoreRsp
+//    do! restoreRsp
     do! undoArgPass
     do! restoreRegisters
   }

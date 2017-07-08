@@ -13,9 +13,9 @@ let main argv =
   try
     let prgm = @" 
       public int main(){
-        string s = ""sup nerds.\nI've got a %i."";
-        printf(s,2);
-        return 1;
+        string s = ""sup nerds.\nArguments %i. %i. %i. %i. %i. %i. %i. %i"";
+        printf(s,1,2,3,4,5,6,7,8);
+        return 8;
       }"
     let p = prgm 
          |> parseProgram 
@@ -25,8 +25,9 @@ let main argv =
          |> assignModule
          |> serializeModule
     do printfn "the progam: %A" p
-    let rtn = ParserTests.endToEnd.executeInDir "manualTest" prgm
-    do printfn "%i" rtn
+    let (exit,stdout) = ParserTests.endToEnd.executeInDir "manualTest" prgm
+    do printfn "%s" stdout
+    do printfn "%i" exit
     1
   with 
   | exn -> printfn "fail with: %A" exn; 1
