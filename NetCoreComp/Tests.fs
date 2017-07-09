@@ -102,7 +102,6 @@ module endToEnd =
          |> parseProgram 
          |> convertModule
         ||> flattenModule
-         |> fst
          |> assignModule
          |> serializeModule
     let dir = "/home/zach/cmp/TestOutput/" + testDir

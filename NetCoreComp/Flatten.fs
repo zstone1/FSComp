@@ -104,19 +104,17 @@ let rec flattenStatement = function
       yield JmpI startLab
       yield LabelI endLab }
     
-let flattenFunc fs n = 
-  let init = {
-    uniqueNum = n
-    instructs = []
-    stringLits = []
-  }
-  let work = mapU flattenStatement fs.body
-  exec work init
+let flattenFunc f = state {
+  do! updateStateU (fun s -> {s with instructs = []})
+  do! mapU flattenStatement f.body
+  let! {instructs = x } = getState
+  return (f.signature, x)
+}
 
 type FlattenedModule = {funcs : (ASTSignature * (Instruct list)) list; lits : (string * string) list}
 let flattenModule fs (scope:Scope) = 
-  let seed = scope.uniqueNum
-  let accum ({funcs = accfuncs; lits = acclits},i) f =
-     let {instructs = l; uniqueNum = i'; stringLits = lits} = flattenFunc f i
-     ({funcs = (f.signature,l) :: accfuncs; lits =  lits @ acclits}, i')
-  List.fold accum ({funcs = []; lits = []},scope.uniqueNum) fs
+  let seed = { uniqueNum = scope.uniqueNum; instructs = []; stringLits = [] }
+  fs 
+  |> mapM flattenFunc
+  |> fun s -> run s seed
+  |> fun (funcs, state) -> {funcs = funcs; lits = state.stringLits}

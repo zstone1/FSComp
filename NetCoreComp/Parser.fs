@@ -40,15 +40,21 @@ let tok s = pstring s >>. spaces >>. preturn ()
 let tok2 s = spaces >>. tok s
 let betweenParens a = between (tok "(") (tok ")") a
 let betweenCurlys a = between (tok "{") (tok "}") a
-let parsePairAndLift p1 p2 l = parse {
+let parsePairAndLift l p1 p2 = parse {
   let! p1' = p1
   let! p2' = p2
   return l (p1',p2')
 }
 
+///fparsec uses an OperatorPrecedenceParser to manage 
+///multiple operators with different precedense at once. 
+///The operator has an ExpressionParser member (parseExpression), which 
+///references the TermParser member, which also refernces parseExpression. 
+///That's how we get recursion here.
 let opp = OperatorPrecedenceParser<_,_,ParserData>()
 let parseExpression = opp.ExpressionParser;
 
+///Here we add the supported operators, where precedence increases with p
 let arithHelper s p = InfixOperator(s, spaces, p, Associativity.Left, fun x y -> Func ("_" + s,[x;y]))
 opp.AddOperator(arithHelper "-" 1)
 opp.AddOperator(arithHelper "+" 1)
@@ -57,6 +63,7 @@ opp.AddOperator(arithHelper "*" 2)
 let expr = 
    let parseInt = pint32 .>> spaces |>> IntLit
    let parseVariable = parseName |>> Variable
+   ///we parse escape characteres so the string "foo\n" ends in a newline in F#, not a '\' and an 'n'.
    let parseString =
      let normal = satisfy (fun c -> c <>'\\' && c <> '"')
      let unescapeChar = function
@@ -73,14 +80,16 @@ let expr =
      return Func (name,args)}
    let parsensExpr = betweenParens parseExpression
               
-   attempt parsensExpr   <|>
-   attempt parseInt      <|> 
-   attempt parseFunc     <|> 
-   attempt parseString   <|>
-   attempt parseVariable <?> 
-   "Failed to parse expression"
+   attempt parsensExpr   
+   <|>  attempt parseInt      
+   <|>  attempt parseFunc     
+   <|>  attempt parseString   
+   <|>  attempt parseVariable 
+   <?>  "Failed to parse expression"
 opp.TermParser <- expr
 
+//Outside of the expression parser, fparsec can create a pair of reference cell
+//and parser to manage recursive parsing. parseStatement is just a redirection to the cell.
 let parseStatement, parseStatementRef = createParserForwardedToRef()
 
 do parseStatementRef :=
@@ -88,25 +97,21 @@ do parseStatementRef :=
    let parseBody =  betweenCurlys <| many parseStatement
    let parseExecution = parseExpression |>> Execution
    let parseIfStat = 
-     parsePairAndLift
+     parsePairAndLift IfStat 
        (tok "if" >>. (betweenParens <| parseExpression))
        parseBody
-       IfStat 
    let parseDeclaration = 
-     parsePairAndLift 
+     parsePairAndLift Declaration 
        parseName 
        parseName 
-       Declaration 
    let parseAssignment =
-     parsePairAndLift
+     parsePairAndLift Assignment
        (parseName .>> tok "=")
        parseExpression
-       Assignment
    let parseWhile = 
-     parsePairAndLift
+     parsePairAndLift While
        (tok "while" >>. (parseExpression |> betweenParens))
        parseBody
-       While
    let parseDeclAndAssign = parse {
        let! ty = parseName
        let! var = parseName

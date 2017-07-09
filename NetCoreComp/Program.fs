@@ -21,7 +21,6 @@ let main argv =
          |> parseProgram 
          |> convertModule
         ||> flattenModule
-         |> fst
          |> assignModule
          |> serializeModule
     do printfn "the progam: %A" p
