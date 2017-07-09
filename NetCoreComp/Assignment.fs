@@ -134,13 +134,13 @@ let alignRsp = state {
 
 ///Predlude for calling functions. Returns the coressponding epilogue
 let callPrologue args = state {
-  let! restoreRegisters = saveRegisters 
-  let! undoArgPass = passArgsByConvention args
+  let! toRestoreRegisters = saveRegisters 
+  let! toUndoArgPass = passArgsByConvention args
 //  let! restoreRsp = //alignRsp
   return state {
 //    do! restoreRsp
-    do! undoArgPass
-    do! restoreRegisters
+    do! toUndoArgPass
+    do! toRestoreRegisters
   }
 }
 
@@ -189,7 +189,7 @@ let assignInstruct =
 let handleArgs (SplitAt 6 (l,r)) = state {
   let! loc = mapM (fun (i : ASTVariable) -> assignLocOnStack (VarName i.name)) l
   yield! loc 
-      |> fun i -> Seq.zip i (Reg <@> callingRegs)
+      |> fun i -> Seq.zip i (List.map Reg callingRegs)
       |> List.ofSeq
       |> List.map MovA
 
