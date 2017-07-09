@@ -116,14 +116,15 @@ module endToEnd =
 
   let execute = executeInDir TestContext.CurrentContext.Test.Name 
 
-  let check f i s = 
+  let checkval (f: _ -> 'a) (i:'a) s = 
     try 
       Assert.AreEqual(i, s |> execute |> f)
     with 
       | CompilerError e -> Assert.Fail("Compilation failed: " + e)
     
-  let checkCode = check fst
-  let checkOut = check snd
+  let check = checkval id 
+  let checkCode = checkval fst
+  let checkOut = checkval snd
 
   [<Test>]
   let simplest () = checkCode 5 @"
@@ -299,4 +300,36 @@ module endToEnd =
         string s = ""Args %i %i %i %i %i %i %i %i %i"";
         printf(s,1,2,3,4,5,6,7,8,9);
         return 8;
+      }"
+  [<Test>]
+  let ``order of parameter eval`` () = checkOut "1\n2\n3\n4\n5\n6\n7\n8\n" @"
+      public int do(int i){
+        printf(""%i"",i);
+        return i;
+      }
+      public int foo(int a, int b, int c, int d, int e, int f, int h, int i){
+        return 0;
+      }
+      public int main(){
+        return foo(do(1),do(2),do(3),do(4),do(5),do(6),do(7),do(8));
+      }
+      "
+  [<Test>]
+  let ``order of operations`` () = checkOut "1\n2\n3\n" @"
+      public int do(int i){
+        printf(""%i"",i);
+        return i;
+      }
+      public int main(){
+        return do(1) + do(2) + do(3);
+      }"
+
+  [<Test>]
+  let ``order of operations 2`` () = check (16, "1\n2\n4\n6\n9\n") @"
+      public int do(int i){
+        printf(""%i"",i);
+        return i;
+      }
+      public int main(){
+        return do(1) + do(do(2) + do(4)) + do(9);
       }"
