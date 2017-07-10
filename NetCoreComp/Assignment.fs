@@ -91,7 +91,7 @@ let callingRegs = [RDI;RSI; RDX;RCX; R8; R9]
 let passArgsByConvention (SplitAt 6 (l, r)) = state {
     let! regPass = l 
                 |> mapM (fun i -> getLoc i <!> getState)
-               |>> Seq.zip (Reg <@> callingRegs)
+               |>> Seq.zip (List.map Reg callingRegs)
                |>> Seq.map MovA
                |>> Seq.toList
     yield! regPass

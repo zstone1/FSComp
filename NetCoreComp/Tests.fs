@@ -332,3 +332,12 @@ module endToEnd =
       public int main(){
         return do(1) + do(do(2) + do(4)) + do(9);
       }"
+  [<Test>]
+  let ``many strings`` () = checkOut "a\nb\nc\nd\n" @"
+      public int main(){
+        printf(""a"");
+        printf(""b"");
+        printf(""c"");
+        printf(""d"");
+        return 0;
+      }"

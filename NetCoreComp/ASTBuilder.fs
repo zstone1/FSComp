@@ -16,6 +16,7 @@ type ASTVariable = {
 type ASTFuncRef = {
   ty : Ty
   name : string
+  ///None if varargs, otherwise the list of types of the arguments
   argTys : Ty list option
 }
 

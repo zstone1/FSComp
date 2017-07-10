@@ -70,13 +70,14 @@ let rec flattenExpression = function
     yield CallI (rtnVar, LabelName s.name, args)
     return rtnVar |> VarAtom }
 
-let getGuardVar = flattenExpression
-              >=> function 
-                  | VarAtom v -> v |> returnM
-                  | x -> state {
-                       let! tempVar = makeVariable
-                       yield AssignI (tempVar, x)
-                       return tempVar }
+let getGuardVar = 
+  flattenExpression
+  >=> function 
+      | VarAtom v -> v |> returnM
+      | x -> state {
+           let! tempVar = makeVariable
+           yield AssignI (tempVar, x)
+           return tempVar }
 
 let rec flattenStatement = function
   | ReturnStat e -> state { let! flatE = flattenExpression e

@@ -12,11 +12,10 @@ let public failf a = Printf.kprintf failComp a
 
 let (|SplitAt|) i = function 
   | xs when List.length xs < i -> (xs,[])
-  | xs -> (List.take 6 xs, List.skip 6 xs)
+  | xs -> (List.take i xs, List.skip i xs)
 
-let (<@>) f l = List.map f l
 
-[<Literal>]
+[<Literal>] 
 let PlusName = "_+"
 [<Literal>]
 let MinusName = "_-"

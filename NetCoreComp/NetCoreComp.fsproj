@@ -13,6 +13,7 @@
     <compile Include="Parser.fs"/>
     <compile Include="ASTBuilder.fs"/>
     <Compile Include="Flatten.fs"/>
+    <Compile Include="Unify.fs"/>
     <Compile Include="Assignment.fs"/>
     <Compile Include="Assembly.fs"/>
     <Compile Include="Tests.fs"/>
