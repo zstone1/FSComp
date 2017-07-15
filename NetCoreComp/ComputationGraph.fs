@@ -12,6 +12,13 @@ let map f = function
   | Step t -> (f t) |> Step
   | Branch (t1,t2) -> (f t1, f t2) |> Branch
 
+let (|AsList|) = function 
+  | Exit -> []
+  | Step t -> [t]
+  | Branch (t1,t2) -> [t1;t2]
+
+let fold acc seed (AsList l) = List.fold acc seed l
+
 type CompNode = {
   instruction : Instruct
   id : int
@@ -39,15 +46,15 @@ let computeEdges prgm f x xs =
 ///Given a list of instructions, produces an adjacency map
 ///of the corresponding computation graph
 let instructGraph l = 
-  let indexed = List.indexed l
+  let prgmWithIds = List.indexed l
   let computeNodes (((id,instruct),_) as x) = 
       let node = {
         id = id
         instruction = instruct
-        next = x ||> computeEdges indexed snd |> map fst}
+        next = x ||> computeEdges prgmWithIds snd |> map fst}
       (id, node)
 
-  indexed 
+  prgmWithIds 
   |> suffixes
   |> List.map computeNodes
   |> Map.ofList
