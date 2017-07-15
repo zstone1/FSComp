@@ -14,11 +14,17 @@ let (|SplitAt|) i = function
   | xs when List.length xs < i -> (xs,[])
   | xs -> (List.take i xs, List.skip i xs)
 
+let suffixes l = 
+  let accum (rtn, suffix) x = 
+      match suffix with 
+      | [] -> raise (Failure "should not be called")
+      | _::ys -> (x,ys)::rtn, ys
+  List.fold accum ([],l) l |> fst |> List.rev
+
 
 [<Literal>] 
 let PlusName = "_+"
 [<Literal>]
 let MinusName = "_-"
-
 [<Literal>]
 let MultName = "_*"
