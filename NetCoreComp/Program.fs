@@ -13,12 +13,11 @@ open ComputationGraph
 let main argv =
   try
     let prgm = @"
+       public int id(int i){
+        return i;
+      }
       public int main(){
-        printf(""a"");
-        printf(""b"");
-        printf(""c"");
-        printf(""d"");
-        return 0;
+        return 1;
       }"
     let p = prgm 
          |> parseProgram 

@@ -100,7 +100,7 @@ let addEdge start finish =
 let computeAdjacency  = 
   let folder adjacencies i node = 
     match node.next with
-    | Exit -> adjacencies
+    | Exit -> setIfAbsent i {ins = []; outs = []} adjacencies
     | Step t -> addEdge i t adjacencies
     | Branch (t1,t2) -> adjacencies |> addEdge i t1 |> addEdge i t2
   Map.fold folder Map.empty
@@ -167,8 +167,9 @@ let colorIL il = il
               |> colorGraph
               |> (exec |> flip <| Map.empty)
 
+let unifiedName i = sprintf "_unified_%i" i
 let replaceVar (coloring:Map<_,_>) v = 
-  let newName = sprintf "_unified_%i" coloring.[v]
+  let newName = coloring.[v] |> unifiedName
   VarName newName
 let replaceAtom coloring = function 
   | VarAtom v -> replaceVar coloring v |> VarAtom
@@ -176,8 +177,16 @@ let replaceAtom coloring = function
 
 let replaceOptionVar (coloring:Map<_,_>) v = 
   match Map.tryFind v coloring with
-  | Some _ -> replaceVar coloring v |> Some
+  | Some _ -> coloring.[v] |> unifiedName |> VarName |> Some
   | None -> None
+
+let replaceAstVar (coloring :Map<_,_>) (v:ASTVariable) = 
+  let newName = Map.tryFind (VarName v.name) coloring 
+             |> Option.map unifiedName
+             |> Option.defaultValue v.name
+  {v with name = newName}
+
+
 
 let mapInstruct f f' g h= function 
   | AddI (a,b) -> AddI (f a, g b)
@@ -193,11 +202,15 @@ let mapInstruct f f' g h= function
 
 let unifyVars c = mapInstruct (replaceVar c) (replaceOptionVar c) (replaceAtom c) id
 
-let unifyVariables il = 
+
+let unifyVariables (signature, il) = 
   let coloring = colorIL il
-  il |> List.map (unifyVars coloring)
+  let newIl = il |> List.map (unifyVars coloring)
+  let newSig = {signature with args = List.map (replaceAstVar coloring) signature.args}
+  (newSig, newIl)
+
 
 let unifyModule (m : FlattenedModule) = 
-  {m with funcs = List.map (fun (i,j) -> (i, unifyVariables j)) m.funcs}
+  {m with funcs = List.map unifyVariables m.funcs}
 
   

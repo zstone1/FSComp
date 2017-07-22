@@ -125,7 +125,7 @@ module endToEnd =
     
   let check = checkval id 
   let checkCode = checkval fst
-  let checkOut = checkval snd
+  let checkStdOut = checkval snd
 
   [<Test>]
   let simplest () = checkCode 5 @"
@@ -288,7 +288,7 @@ module endToEnd =
         return a + b + c + d + e + f;
       }"
   [<Test>]
-  let ``calling convention 8`` () = checkOut "Args 1 2 3 4 5 6 7 8\n" @" 
+  let ``calling convention 8`` () = checkStdOut "Args 1 2 3 4 5 6 7 8\n" @" 
       public int main(){
         string s = ""Args %i %i %i %i %i %i %i %i"";
         printf(s,1,2,3,4,5,6,7,8);
@@ -296,14 +296,14 @@ module endToEnd =
       }"
 
   [<Test>]
-  let ``calling conventionVerify 9`` () = checkOut "Args 1 2 3 4 5 6 7 8 9\n" @" 
+  let ``calling conventionVerify 9`` () = checkStdOut "Args 1 2 3 4 5 6 7 8 9\n" @" 
       public int main(){
         string s = ""Args %i %i %i %i %i %i %i %i %i"";
         printf(s,1,2,3,4,5,6,7,8,9);
         return 8;
       }"
   [<Test>]
-  let ``order of parameter eval`` () = checkOut "1\n2\n3\n4\n5\n6\n7\n8\n" @"
+  let ``order of parameter eval`` () = checkStdOut "1\n2\n3\n4\n5\n6\n7\n8\n" @"
       public int do(int i){
         printf(""%i"",i);
         return i;
@@ -316,7 +316,7 @@ module endToEnd =
       }
       "
   [<Test>]
-  let ``order of operations`` () = checkOut "1\n2\n3\n" @"
+  let ``order of operations`` () = checkStdOut "1\n2\n3\n" @"
       public int do(int i){
         printf(""%i"",i);
         return i;
@@ -335,7 +335,7 @@ module endToEnd =
         return do(1) + do(do(2) + do(4)) + do(9);
       }"
   [<Test>]
-  let ``many strings`` () = checkOut "a\nb\nc\nd\n" @"
+  let ``many strings`` () = checkStdOut "a\nb\nc\nd\n" @"
       public int main(){
         printf(""a"");
         printf(""b"");
