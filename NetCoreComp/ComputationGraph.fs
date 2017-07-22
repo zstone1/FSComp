@@ -2,6 +2,7 @@ module ComputationGraph
 open Flatten
 open ASTBuilder
 open FSharpx.State
+open FSharpx
 open Aether
 
 type Next<'t> = 
@@ -124,15 +125,32 @@ let rec trackParents' v (adj:Map<_,_>) (g:Map<_,_>) n = state {
 
 let trackParents v adj g n = exec (trackParents' v adj g n) []
 
-let getLiveNodes (graph:Map<int,CompNode>) = seq {
+let getLiveNodes graph = query {
   let adj = computeAdjacency graph
   for (k,c) in Map.toSeq graph do
   for var in getReadVariables c.instruction do
-  for liveNode in  trackParents var adj graph k do
-  yield (var, liveNode)
+  for l in  trackParents var adj graph k do
+  select (var, l)
+}
+
+let livenessNodesToGraph (s:seq<_>) = query {
+  for (v1, n1) in s do
+  join (v2, n2) in s on (n1 = n2)
+  select (v1, v2)
+  distinct into (v1,v2)
+  groupBy v1 into g 
+  select (g.Key, Seq.map snd g)
+}
+
+let assignColor color node = updateStateU <| addOrUpdate node color (konst color)
+
+let greedyColorGraph (g:Map<'a,seq<'a>>) = state {
+  for x in g do 
+    for neighbor in x.Value do 
+      let! 
 }
   
-
+  
     
 
   
