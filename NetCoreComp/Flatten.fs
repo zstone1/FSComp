@@ -19,7 +19,7 @@ type Instruct =
   | AssignI of Variable * Atom
   | JnzI of LabelMarker
   | JmpI of LabelMarker
-  | CallI of Variable * LabelMarker * Atom list
+  | CallI of Variable option * LabelMarker * Atom list
   | ReturnI of Atom
   | LabelI of LabelMarker
   | AddI of Variable * Atom
@@ -67,7 +67,7 @@ let rec flattenExpression = function
   | ASTFunc (s,args) -> state {
     let! args = mapM flattenExpression args
     let! rtnVar = makeVariable
-    yield CallI (rtnVar, LabelName s.name, args)
+    yield CallI (Some rtnVar, LabelName s.name, args)
     return rtnVar |> VarAtom }
 
 let getGuardVar = 

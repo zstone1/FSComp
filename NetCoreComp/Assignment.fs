@@ -179,13 +179,16 @@ let assignInstruct =
   | AddI (a,b) -> handleArithWithRax AddA a b
   | SubI (a,b) -> handleArithWithRax SubA a b
   | IMulI (a,b) -> handleArithWithRax IMulA a b
-  | CallI (v, l, args) -> state {
+  | CallI (Some v, l, args) -> state {
       let! callEpilogue = callPrologue args
       yield CallA l 
       let! rtnLoc = assignLocOnStack v
       yield MovA (rtnLoc, Reg RAX)
       do! callEpilogue }
-
+  | CallI (None, l, args) -> state {
+      let! callEpilogue = callPrologue args
+      yield CallA l 
+      do! callEpilogue }
 let handleArgs (SplitAt 6 (l,r)) = state {
   let! loc = mapM (fun (i : ASTVariable) -> assignLocOnStack (VarName i.name)) l
   yield! loc 

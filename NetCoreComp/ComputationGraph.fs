@@ -84,7 +84,7 @@ let getReadVariables = function
   | CallI (_,_,c) 
       -> c |> List.collect getVariable'
 let getWrittenVariables = function 
-  | AssignI (x,_) | CallI (x,_,_) -> [x]
+  | AssignI (x,_) | CallI (Some x,_,_) -> [x]
   | _ -> []
 
 type Neighbors<'a> = {ins : 'a list; outs : 'a list}
@@ -174,7 +174,12 @@ let replaceAtom coloring = function
   | VarAtom v -> replaceVar coloring v |> VarAtom
   | x -> x
 
-let mapInstruct f g h= function 
+let replaceOptionVar (coloring:Map<_,_>) v = 
+  match Map.tryFind v coloring with
+  | Some _ -> replaceVar coloring v |> Some
+  | None -> None
+
+let mapInstruct f f' g h= function 
   | AddI (a,b) -> AddI (f a, g b)
   | CmpI (a,b) -> CmpI (f a, g b)
   | SubI (a,b) -> SubI (f a, g b)
@@ -182,11 +187,11 @@ let mapInstruct f g h= function
   | AssignI (a,b) -> AssignI (f a, g b)
   | JmpI (l) -> JmpI (h l)
   | JnzI (l) -> JnzI (h l)
-  | CallI (v,l,args) -> CallI (f v, h l, List.map g args)
+  | CallI (v,l,args) -> CallI (Option.bind f' v, h l, List.map g args)
   | LabelI (l) -> LabelI (h l)
   | ReturnI (v) -> ReturnI (g v)
 
-let unifyVars c = mapInstruct (replaceVar c) (replaceAtom c) id
+let unifyVars c = mapInstruct (replaceVar c) (replaceOptionVar c) (replaceAtom c) id
 
 let unifyVariables il = 
   let coloring = colorIL il

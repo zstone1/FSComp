@@ -25,14 +25,14 @@ let main argv =
          |> convertModule
         ||> flattenModule
          |> unifyModule
-//         |> assignModule
-//         |> serializeModule
-         |> (fun i -> i.funcs.Head |> snd)
-    do p |> List.iter (printfn "%A")
-    1
-//    let (exit,stdout) = ParserTests.endToEnd.executeInDir "manualTest" prgm
-//    do printfn "%s" stdout
-//    do printfn "%i" exit
+         |> assignModule
+         |> serializeModule
+//         |> (fun i -> i.funcInstructions.Head |> snd)
+//    do p.ainstructs |> List.iter (printfn "%A")
 //    1
+    let (exit,stdout) = ParserTests.endToEnd.executeInDir "manualTest" prgm
+    do printfn "%s" stdout
+    do printfn "%i" exit
+    1
   with 
   | exn -> printfn "fail with: %A" exn; 1

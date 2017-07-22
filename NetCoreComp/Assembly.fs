@@ -11,7 +11,7 @@ type AssemblyState = {
   rspOffset : int
 }
 
-let getDepthWithOffset st = st.stackDepth + (st.stackDepth - 8) % 16
+let getDepthWithOffset st = st.stackDepth + (st.stackDepth - 8) % 16 |> abs
 
 let serializeLocation stackDepth = function 
   | Reg x -> (sprintf "%A" x).ToLowerInvariant()
