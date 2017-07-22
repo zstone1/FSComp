@@ -21,6 +21,24 @@ let suffixes l =
       | _::ys -> (x,ys)::rtn, ys
   List.fold accum ([],l) l |> fst |> List.rev
 
+let cons x xs = x :: xs
+
+let (|Present|_|) v m = 
+  match Map.tryFind v m with
+  | Some s -> Present s |> Some
+  | None -> None
+let addOrUpdate k s f = function
+  | Present k v as g-> Map.add k (f v) g
+  | g -> Map.add k s g
+
+let update k f = function 
+  | Present k v as g -> Map.add k (f v) g
+  | g -> failf "Expected dictionary %A to have key %A" g k
+
+let setIfAbsent k v = addOrUpdate k v id
+
+let allKeys g = g |> Map.toSeq |> Seq.map fst 
+
 
 [<Literal>] 
 let PlusName = "_+"

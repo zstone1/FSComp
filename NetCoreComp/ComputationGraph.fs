@@ -1,6 +1,8 @@
 module ComputationGraph
 open Flatten
 open ASTBuilder
+open FSharpx.State
+open Aether
 
 type Next<'t> = 
   | Exit
@@ -34,7 +36,7 @@ let (|Return|StepNext|StepJump|BranchJump|) = function
   | ReturnI _ -> Return
   | JnzI l  -> BranchJump l
   | JmpI l  -> StepJump l
-  | CmpI _ | AssignI _ | AddI _ | LabelI _
+  | CmpI _ | AssignI _ | AddI _ | LabelI _ | IMulI _ | SubI _
   | CallI _ 
       -> StepNext
 
@@ -80,20 +82,56 @@ let getReadVariables = function
       -> []
   | CallI (_,_,c) 
       -> c |> List.collect getVariable'
+let getWrittenVariables = function 
+  | AssignI (x,_) | CallI (x,_,_) -> [x]
+  | _ -> []
 
-///A graph traversal that requires: For every loop,
-///There is exactly one path from the root of the graph
-///to the loop (where the path does not have any edge on the loop).
-let getLiveNodes v (graph:Map<int,CompNode>) = 
-  let result = Map.empty
-  let rec traverse (liveBranch, state) key = 
-    if Map.containsKey key state 
-    then state //becaues of unique paths, no need to duplicate work.
-    else
-      let {instruction = i; next = n} = graph.[key] 
-      let isLive = (i |> getReadVariables |> List.contains v) || liveBranch
-      let newState = Map.add key isLive
-      fold (fun g1 g2 -> Map.ofList (Map.toList g1 @ Map.toList g2)) state n 
+type Neighbors<'a> = {ins : 'a list; outs : 'a list}
+let SetIns f s = {s with ins = f s.ins}
+let SetOuts f s  = {s with outs = f s.outs}
+
+let addEdge start finish = 
+     setIfAbsent start {ins = [] ;outs =[]}
+  >> update start (SetOuts (cons finish))
+  >> setIfAbsent finish {ins = [] ;outs =[]}
+  >> update finish (SetIns (cons start))
+
+let computeAdjacency  = 
+  let folder adjacencies i node = 
+    match node.next with
+    | Exit -> adjacencies
+    | Step t -> addEdge i t adjacencies
+    | Branch (t1,t2) -> adjacencies |> addEdge i t1 |> addEdge i t2
+  Map.fold folder Map.empty
+
+///Given a node where variable v is read,
+///This returns all nodes where v is live
+///up to readNode.
+let rec trackParents' v (adj:Map<_,_>) (g:Map<_,_>) n = state {
+  let! s = getState
+  match List.contains n s with
+  | true -> return ()
+  | false -> 
+      do! (n :: s) |> putState 
+      let writtenVars = g.[n].instruction |> getWrittenVariables
+      match List.contains v writtenVars with
+      | true -> return ()
+      | false ->
+         let parents = adj.[n].ins
+         //non-tail recursive... probably bad.
+         do! mapU (trackParents' v adj g) parents
+}        
+
+let trackParents v adj g n = exec (trackParents' v adj g n) []
+
+let getLiveNodes (graph:Map<int,CompNode>) = seq {
+  let adj = computeAdjacency graph
+  for (k,c) in Map.toSeq graph do
+  for var in getReadVariables c.instruction do
+  for liveNode in  trackParents var adj graph k do
+  yield (var, liveNode)
+}
+  
 
     
 
