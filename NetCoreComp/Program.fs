@@ -12,22 +12,23 @@ open ComputationGraph
 [<EntryPoint>]
 let main argv =
   try
-    let prgm = @" 
+    let prgm = @"
       public int main(){
-        int j = 6;
-        int k = j + j;
-        return k;
+        printf(""a"");
+        printf(""b"");
+        printf(""c"");
+        printf(""d"");
+        return 0;
       }"
     let p = prgm 
          |> parseProgram 
          |> convertModule
         ||> flattenModule
-         |> (fun i -> i.funcs)
-         |> List.head 
-         |> snd
-         |> buildComputationGraph
-         |> getLiveNodes
-    do p |> Seq.iter (printfn "%A")
+         |> unifyModule
+//         |> assignModule
+//         |> serializeModule
+         |> (fun i -> i.funcs.Head |> snd)
+    do p |> List.iter (printfn "%A")
     1
 //    let (exit,stdout) = ParserTests.endToEnd.executeInDir "manualTest" prgm
 //    do printfn "%s" stdout

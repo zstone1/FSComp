@@ -82,6 +82,7 @@ module endToEnd =
   open Flatten
   open Assembly
   open ASTBuilder
+  open ComputationGraph
   open Swensen.Unquote
  
   let testOutputDir = "/home/zach/cmp/TestOutput/"
@@ -102,6 +103,7 @@ module endToEnd =
          |> parseProgram 
          |> convertModule
         ||> flattenModule
+         |> unifyModule
          |> assignModule
          |> serializeModule
     let dir = "/home/zach/cmp/TestOutput/" + testDir

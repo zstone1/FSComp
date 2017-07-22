@@ -136,24 +136,63 @@ let getLiveNodes graph = query {
 let livenessNodesToGraph (s:seq<_>) = query {
   for (v1, n1) in s do
   join (v2, n2) in s on (n1 = n2)
-  select (v1, v2)
-  distinct into (v1,v2)
-  groupBy v1 into g 
+  select (v1, v2) 
+  distinct into x
+//  where (fst x <> snd x)
+  groupBy (fst x) into g 
   select (g.Key, Seq.map snd g)
 }
 
 let assignColor color node = updateStateU <| addOrUpdate node color (konst color)
 
-let greedyColorGraph (g:Map<'a,seq<'a>>) = state {
+let greedyColorGraph nextColor (g:Map<_,_>) =
+ let evaled = (Map.map (konst List.ofSeq) g)
+ state {
   for x in g do 
-    for neighbor in x.Value do 
-      let! 
+    let! s = getState
+    let n = Seq.choose (Map.tryFind |> flip <| s)  x.Value
+    let c = nextColor n
+    do! assignColor c x.Key
 }
+
+let pickNext cs = Seq.fold max 0 cs |> (+) 1
   
-  
+let colorGraph a = greedyColorGraph pickNext a
     
+let colorIL il = il 
+              |> buildComputationGraph
+              |> getLiveNodes
+              |> livenessNodesToGraph
+              |> Map.ofSeq
+              |> colorGraph
+              |> (exec |> flip <| Map.empty)
 
-  
+let replaceVar (coloring:Map<_,_>) v = 
+  let newName = sprintf "_unified_%i" coloring.[v]
+  VarName newName
+let replaceAtom coloring = function 
+  | VarAtom v -> replaceVar coloring v |> VarAtom
+  | x -> x
 
-  
+let mapInstruct f g h= function 
+  | AddI (a,b) -> AddI (f a, g b)
+  | CmpI (a,b) -> CmpI (f a, g b)
+  | SubI (a,b) -> SubI (f a, g b)
+  | IMulI (a,b) -> IMulI (f a, g b)
+  | AssignI (a,b) -> AssignI (f a, g b)
+  | JmpI (l) -> JmpI (h l)
+  | JnzI (l) -> JnzI (h l)
+  | CallI (v,l,args) -> CallI (f v, h l, List.map g args)
+  | LabelI (l) -> LabelI (h l)
+  | ReturnI (v) -> ReturnI (g v)
+
+let unifyVars c = mapInstruct (replaceVar c) (replaceAtom c) id
+
+let unifyVariables il = 
+  let coloring = colorIL il
+  il |> List.map (unifyVars coloring)
+
+let unifyModule (m : FlattenedModule) = 
+  {m with funcs = List.map (fun (i,j) -> (i, unifyVariables j)) m.funcs}
+
   
