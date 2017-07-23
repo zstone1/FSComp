@@ -82,7 +82,7 @@ module endToEnd =
   open Flatten
   open Assembly
   open ASTBuilder
-  open ComputationGraph
+  open Unification
   open Swensen.Unquote
  
   let testOutputDir = "/home/zach/cmp/TestOutput/"
@@ -342,4 +342,37 @@ module endToEnd =
         printf(""c"");
         printf(""d"");
         return 0;
+      }"
+  [<Test>]
+  let ``unused params`` () = checkCode 13 @"
+      public int main(){
+        return Foo(1,2,3);
+      }
+
+      public int Foo(int i, int j, int k){
+        k = 10;
+        return i + j + k;
+      }"
+  [<Test>]
+  let ``args never unified`` () = checkCode 1 @"
+      public int main(){
+        return Foo(1,2);
+      }
+
+      public int Foo(int i, int j){
+        if(i)
+        {
+          j = 10;
+          return j;
+        }
+        return i;
+      }"
+  [<Test>]
+  let ``unreferenced param`` () = checkCode 1 @"
+      public int main(){
+        return 1;
+      }
+
+      public int Foo(int i){
+        return 2;
       }"

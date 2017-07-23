@@ -26,6 +26,18 @@ type Instruct =
   | SubI of Variable * Atom
   | IMulI of Variable * Atom
 
+let mapInstruct f f' g h= function 
+  | AddI (a,b) -> AddI (f a, g b)
+  | CmpI (a,b) -> CmpI (f a, g b)
+  | SubI (a,b) -> SubI (f a, g b)
+  | IMulI (a,b) -> IMulI (f a, g b)
+  | AssignI (a,b) -> AssignI (f a, g b)
+  | JmpI (l) -> JmpI (h l)
+  | JnzI (l) -> JnzI (h l)
+  | CallI (v,l,args) -> CallI (f' v, h l, List.map g args)
+  | LabelI (l) -> LabelI (h l)
+  | ReturnI (v) -> ReturnI (g v)
+
 type InterSt = {
   uniqueNum : int
   instructs : Instruct list
