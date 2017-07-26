@@ -8,7 +8,7 @@ open ASTBuilder
 open FSharpx.State
  
 type AssemblyState = {
-  rspOffset : int
+  rspOffset : int 
 }
 
 let getDepthWithOffset st = st.stackDepth + (st.stackDepth - 8) % 16 |> abs

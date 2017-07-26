@@ -47,6 +47,8 @@ type InterSt = {
 type StateBuilder with 
   member x.Yield(i) = updateStateU (fun s -> {s with InterSt.instructs = s.instructs @ [i]})
 
+let toVar {ASTVariable.name = n} = VarName n
+
 let makeNamePre prefix : State<string,InterSt> = state {
     let! s = getState 
     do! putState {s with uniqueNum = s.uniqueNum + 1}
