@@ -63,7 +63,7 @@ type Location =
   | PreStack of int
   | Imm of int
   | PostStack of int
-  | WithOffSet of Location
+  | WithOffSet of int * Location
   | VarStack of int
 
  
@@ -110,15 +110,11 @@ let allVariables sgn il =
   inprgm @ args
   
 let assignHomes sgn il = 
-//  let allVars = il |> allVariables
+  let allVars = il |> allVariables sgn |> List.distinct 
+  let homes = (Seq.initInfinite VarStack)// |> Seq.append (List.map Reg homeRegisters) 
 //  let affinities = il |> allAffinities
 //Hack to just use stack space for everything.
-  il
-  |> allVariables sgn
-  |> List.distinct
-  |> List.indexed
-  |> List.map (fun (i, v) -> (VarAtom v, VarStack i))
-  |> Map.ofSeq
+  Seq.zip allVars homes |> Map.ofSeq
 
 let getVarStackDepth homes =
   homes 

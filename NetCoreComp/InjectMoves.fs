@@ -35,18 +35,18 @@ type AssignNode = {
 
 
 let toLoc (homes:Map<_,_>) = function 
-  | VarAtom v -> homes.[VarAtom v]
+  | VarAtom v -> homes.[v]
   | DataRefAtom v -> Data v
   | IntLitAtom i -> Imm i
 
+//todo: save caller save registers.
 let initialMoves args (homes: Map<_,_>) = 
   args 
-  |> List.map VarAtom
   |> incomingArgReqs
   |> Seq.map (fun (l,v) -> MovLoc (homes.[v], l))
 
 let private movToReg (homes: Map<_,_>) arith var atom = 
-  let varHome = homes.[VarAtom var]
+  let varHome = homes.[var]
   match varHome with
   | Reg r -> [],[], arith (Reg r, atom |> toLoc homes)
   | x -> [MovLoc(Reg R11, x)],[MovLoc(x, Reg R11)], arith (Reg R11, atom |> toLoc homes)
@@ -58,19 +58,19 @@ let getMoves endLab (homes: Map<_,_>) = function
   | JmpI l -> [],[],JmpA l
   | JnzI l -> [],[],JnzA l
   | LabelI l -> [],[],LabelA l
-  | AssignI (var, at) -> [],[MovLoc(homes.[VarAtom var], at |> toLoc homes )],NOP 
+  | AssignI (var, at) -> [],[MovLoc(homes.[var], at |> toLoc homes )],NOP 
   | ReturnI v -> [MovLoc (Reg RAX, v |> toLoc homes)],[], JmpA endLab
   | CallI (rtn, lab, args) 
     //This assumes that the normal rsp offset is even
     -> let stackArgCount = max (List.length args - 6) 0
        let offsetStack = ((stackArgCount + 1) % 2)
-       let offsetMod = match offsetStack with 0 -> id | _ -> WithOffSet
+       let offsetMod = match offsetStack with 0 -> id | _ -> fun x -> WithOffSet (1,x)
        let reqs = args 
                |> callingRequirements PostStack 
                |> Seq.map (fun (x,y) -> MovLoc (x, y |> toLoc homes |> offsetMod)) 
                |> List.ofSeq
        let saveRtnToTemp = rtn |> Option.map (fun v -> MovLoc (Reg R11, Reg RAX)) |> Option.toList
-       let saveRtnToHome = rtn |> Option.map (fun v -> MovLoc (homes.[VarAtom v], Reg R11)) |> Option.toList
+       let saveRtnToHome = rtn |> Option.map (fun v -> MovLoc (homes.[v], Reg R11)) |> Option.toList
        let adjustStack = (StackAdj (offsetStack + stackArgCount))
        (StackAdj -offsetStack) :: reqs , saveRtnToTemp @ [adjustStack] @ saveRtnToHome, CallA lab
 
@@ -115,7 +115,7 @@ let getAssemblyForNode (n:AssignNode) =
   @ (n.afterMoves |> List.collect toAssembly)
   
 
-type AsmModule = {funcs : (ASTSignature *  Map<Atom,Location> * Assembly list) list; 
+type AsmModule = {funcs : (ASTSignature *  Map<Variable,Location> * Assembly list) list; 
                   lits : (string * string) list}
 
 let assignMovesFunc sgn il = 

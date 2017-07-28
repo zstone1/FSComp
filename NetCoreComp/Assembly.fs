@@ -16,9 +16,9 @@ let rec serializeLocation (homes:Map<_,_>) =
   | Data s -> s
   | VarStack i -> 8 * (rspDepth - (i + 1)) |> sprintf "qword [rsp + %i]" //stackgrowsdown.com
   | PreStack i -> 8 * (rspDepth + 1 + (i+1)) |> sprintf "qword [rsp + %i]" 
-  | WithOffSet (VarStack i) -> serializeLocation homes (VarStack (i-1))
-  | WithOffSet (PreStack i) -> serializeLocation homes (PreStack (i-1))
-  | WithOffSet x -> serializeLocation homes x
+  | WithOffSet (offset, VarStack i) -> serializeLocation homes (VarStack (i-offset))
+  | WithOffSet (offset, PreStack i) -> serializeLocation homes (PreStack (i-offset))
+  | WithOffSet (_,x) -> serializeLocation homes x
   | PostStack _ -> failf "Should not reference postStack this far"
 
 let serializeInstruction st = 
@@ -70,5 +70,5 @@ let serializeModule {AsmModule.funcs = fs; lits = l} =
   let prgm = fs |> List.map (uncurry3 funcToInstructions)
   let data = l |> List.map toDataLabel 
   let initialize = "        global main\n        extern printf\n        section .text"
-  initialize :: prgm @ data |> String.concat "\n"
+  initialize :: prgm @ data |> Seq.filter ((<>)"") |> String.concat "\n"
           

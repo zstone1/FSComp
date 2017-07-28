@@ -14,17 +14,16 @@ open InjectMoves
 let main argv =
   try
     let prgm = @"
-    public int do(int i){
-      printf(""%i"",i);
-      return i;
-    }
-    public int foo(int a, int b, int c, int d, int e, int f, int h, int i){
-      return 0;
-    }
-    public int main(){
-      return foo(do(1),do(2),do(3),do(4),do(5),do(6),do(7),do(8));
-    }
-    "
+  public int main(){
+    int x = 2;
+    int y = bar(x);
+    return y + x;
+  } 
+  
+  public int bar(int asdf){
+    int x = asdf + 3;
+    return x;
+  }"
 
     let p = prgm 
          |> parseProgram 
