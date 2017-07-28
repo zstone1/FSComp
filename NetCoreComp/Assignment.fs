@@ -24,7 +24,7 @@ type SavedLocation =
   | SReg of Register
   | DistFromBase of int
 
-type Instruction = 
+type Assembly = 
   | CmpA of Location * Location
   | MovA of Location * Location
   | JnzA of LabelMarker
@@ -40,7 +40,7 @@ type Instruction =
   | SyscallA
 
 type AssignSt = {
-    ainstructs : Instruction list
+    ainstructs : Assembly list
     locations : Map<Variable, SavedLocation>
     stackDepth : int
     rspMod : int

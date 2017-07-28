@@ -3,22 +3,18 @@ open ASTBuilder
 open FSharp.Collections;
 open FSharpx
 open Flatten
-open Assignment
+open InjectMoves
+open AssignHomes
 open ASTBuilder
 open FSharpx.State
  
-type AssemblyState = {
-  rspOffset : int 
-}
-
-let getDepthWithOffset st = st.stackDepth + (st.stackDepth - 8) % 16 |> abs
-
-let serializeLocation stackDepth = function 
+let serializeLocation (homes:Map<_,_>) = 
+  let rspDepth = getVarStackDepth homes
+  function 
   | Reg x -> (sprintf "%A" x).ToLowerInvariant()
   | Imm (i) -> i.ToString()
   | Data s -> s
-  | Stack { distFromBase = b; currentRspMod = modifier} ->
-       (stackDepth + modifier) - b |> sprintf "qword [rsp + %i]" //stackgrowsdown.com
+  | VarStack i -> 8 * (rspDepth - i) |> sprintf "qword [rsp + %i]" //stackgrowsdown.com
 
 let serializeInstruction st = 
   let serialize = serializeLocation st
@@ -42,16 +38,18 @@ let serializeInstruction st =
   | PopA l -> handleOp1Loc "pop" (Reg l)
 
 
-let intro st = [LabelA (st.callLabName |> LabelName);
-                SubA (Reg RSP, Imm (getDepthWithOffset st))]
-let outro st = [LabelA (st.rtnLabName |> LabelName);
-                AddA (Reg RSP, Imm (getDepthWithOffset st));
+
+let intro sgn homes = [LabelA (sgn |> getCallLab);
+                SubA (Reg RSP, Imm (getVarStackDepth homes))]
+let outro sgn homes = [LabelA (sgn |> getEndLab);
+                AddA (Reg RSP, Imm (getVarStackDepth homes));
                 RetA]
 
-let funcToInstructions (s: ASTSignature, st : AssignSt) = 
-  intro st @ st.ainstructs @ outro st 
-  |> List.map (serializeInstruction (getDepthWithOffset st))
+let funcToInstructions sgn homes instrs = 
+  intro sgn homes @ instrs@ outro sgn homes
+  |> List.map (serializeInstruction homes)
   |> String.concat "\n"
+
 
 let escapeString = function 
   | '\n' -> "\\n" 

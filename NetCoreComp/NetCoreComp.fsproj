@@ -15,7 +15,9 @@
     <Compile Include="Flatten.fs"/>
     <Compile Include="ComputationGraph.fs"/>
     <Compile Include="Unification.fs"/>
-    <Compile Include="AssignReg.fs"/>
+    <Compile Include="AssignHomes.fs"/>
+    <Compile Include="InjectMoves.fs"/>
+    <Compile Include="Assignment2.fs"/>
     <Compile Include="Assignment.fs"/>
     <Compile Include="Assembly.fs"/>
     <Compile Include="Tests.fs"/>
