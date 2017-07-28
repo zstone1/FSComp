@@ -63,6 +63,7 @@ type Location =
   | PreStack of int
   | Imm of int
   | PostStack of int
+  | WithOffSet of Location
   | VarStack of int
 
  
@@ -99,19 +100,22 @@ let private allAffinities il =
   |> Map.fold (fun s _ v -> Seq.append s (getAfinity v)) Seq.empty
   |> Seq.fold (fun s (l,a) -> Map.add a l s) Map.empty
 
-let allVariables il = 
-  il 
-  |> (toGraph >> fst)
-  |> Map.fold (fun s _ v -> Seq.append (getReadVariables v.instruction) s) Seq.empty
+let allVariables sgn il = 
+  let getAllVariables v = getReadVariables v.instruction @ getWrittenVariables v.instruction
+  let inprgm = il 
+            |> (toGraph >> fst)
+            |> Map.fold (fun s _ v -> List.append (getAllVariables v) s) List.empty
+  let args = List.map toVar sgn.args
+  inprgm @ args
   
-let assignHomes il = 
+let assignHomes sgn il = 
 //  let allVars = il |> allVariables
 //  let affinities = il |> allAffinities
 //Hack to just use stack space for everything.
   il
-  |> allVariables
-  |> Seq.indexed
-  |> Seq.map (fun (i, v) -> (VarAtom v, VarStack i))
+  |> allVariables sgn
+  |> List.indexed
+  |> List.map (fun (i, v) -> (VarAtom v, VarStack i))
   |> Map.ofSeq
 
 let getVarStackDepth homes =
@@ -121,3 +125,7 @@ let getVarStackDepth homes =
     | VarStack i -> i
     | _ -> 0)
   |> Seq.fold max 0
+  |> (+) 1
+  |> function 
+     | Even as i -> i
+     | Odd as i-> i + 1

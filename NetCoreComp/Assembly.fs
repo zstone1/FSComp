@@ -8,13 +8,18 @@ open AssignHomes
 open ASTBuilder
 open FSharpx.State
  
-let serializeLocation (homes:Map<_,_>) = 
-  let rspDepth = getVarStackDepth homes
+let rec serializeLocation (homes:Map<_,_>) = 
+  let rspDepth = getVarStackDepth homes 
   function 
   | Reg x -> (sprintf "%A" x).ToLowerInvariant()
   | Imm (i) -> i.ToString()
   | Data s -> s
-  | VarStack i -> 8 * (rspDepth - i) |> sprintf "qword [rsp + %i]" //stackgrowsdown.com
+  | VarStack i -> 8 * (rspDepth - i - 1) |> sprintf "qword [rsp + %i]" //stackgrowsdown.com
+  | PreStack i as x-> printf "%A" x; 8* (rspDepth) + 8* i |> sprintf "qword [rsp + %i]" 
+  | WithOffSet (VarStack i) -> serializeLocation homes (VarStack (i+1))
+  | WithOffSet (PreStack i) -> serializeLocation homes (PreStack (i+1))
+  | WithOffSet x -> serializeLocation homes x
+  | PostStack _ -> failf "Should not reference postStack this far"
 
 let serializeInstruction st = 
   let serialize = serializeLocation st
@@ -36,14 +41,17 @@ let serializeInstruction st =
   | RetA -> handleOp0 "ret"
   | PushA l -> handleOp1Loc "push" (Reg l)
   | PopA l -> handleOp1Loc "pop" (Reg l)
+  | NOP -> ""
 
 
 
-let intro sgn homes = [LabelA (sgn |> getCallLab);
-                SubA (Reg RSP, Imm (getVarStackDepth homes))]
-let outro sgn homes = [LabelA (sgn |> getEndLab);
-                AddA (Reg RSP, Imm (getVarStackDepth homes));
-                RetA]
+let intro sgn homes = [
+  LabelA (sgn |> getCallLab); 
+  SubA (Reg RSP, Imm ( 8 * getVarStackDepth homes))]
+let outro sgn homes = [
+  LabelA (sgn |> getEndLab); 
+  AddA (Reg RSP, Imm (8 * getVarStackDepth homes));
+  RetA]
 
 let funcToInstructions sgn homes instrs = 
   intro sgn homes @ instrs@ outro sgn homes
@@ -58,8 +66,8 @@ let escapeString = function
   | c -> c.ToString()
 
 let toDataLabel (lab, s) = sprintf "%s:\n        db     `%s`, 10, 0" lab (String.collect escapeString s)
-let serializeModule {funcInstructions = fs; dataLits = l} = 
-  let prgm = fs |> List.map funcToInstructions 
+let serializeModule {AsmModule.funcs = fs; lits = l} = 
+  let prgm = fs |> List.map (uncurry3 funcToInstructions)
   let data = l |> List.map toDataLabel 
   let initialize = "        global main\n        extern printf\n        section .text"
   initialize :: prgm @ data |> String.concat "\n"

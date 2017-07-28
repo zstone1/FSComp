@@ -23,6 +23,7 @@ type Assembly =
   | PopA of Register
   | RetA
   | SyscallA
+  | NOP
 
 type AssignNode = {
   id : int
@@ -42,7 +43,7 @@ let initialMoves args (homes: Map<_,_>) =
   args 
   |> List.map VarAtom
   |> incomingArgReqs
-  |> Seq.map (fun (l,v) -> MovLoc (l, homes.[v]))
+  |> Seq.map (fun (l,v) -> MovLoc (homes.[v], l))
 
 let private movToReg (homes: Map<_,_>) arith var atom = 
   let varHome = homes.[VarAtom var]
@@ -57,12 +58,17 @@ let getMoves endLab (homes: Map<_,_>) = function
   | JmpI l -> [],[],JmpA l
   | JnzI l -> [],[],JnzA l
   | LabelI l -> [],[],LabelA l
-  | AssignI (var, at) -> [],[], MovA (homes.[VarAtom var], at |> toLoc homes )
-  | ReturnI v -> [MovLoc (Reg RAX, homes.[v])],[], JmpA endLab
+  | AssignI (var, at) -> [],[MovLoc(homes.[VarAtom var], at |> toLoc homes )],NOP 
+  | ReturnI v -> [MovLoc (Reg RAX, v |> toLoc homes)],[], JmpA endLab
   | CallI (rtn, lab, args) 
-    -> let reqs = args |> callingRequirements PostStack |> Seq.map (fun (x,y) -> MovLoc (x,homes.[y])) |> List.ofSeq
-       let stackArgCount = max (Seq.length reqs - 6) 0
+    //This assumes that the normal rsp offset is even
+    -> let stackArgCount = max (List.length args - 6) 0
        let offsetStack = ((stackArgCount + 1) % 2)
+       let offsetMod = match offsetStack with 0 -> id | _ -> WithOffSet
+       let reqs = args 
+               |> callingRequirements PostStack 
+               |> Seq.map (fun (x,y) -> MovLoc (x, y |> toLoc homes |> offsetMod)) 
+               |> List.ofSeq
        let saveRtnToTemp = rtn |> Option.map (fun v -> MovLoc (Reg R11, Reg RAX)) |> Option.toList
        let saveRtnToHome = rtn |> Option.map (fun v -> MovLoc (homes.[VarAtom v], Reg R11)) |> Option.toList
        let adjustStack = (StackAdj -(offsetStack + stackArgCount))
@@ -80,25 +86,52 @@ let toAssignNode endLab homes (c:CompNode) =
 
 let getEndLab (x:ASTSignature) = sprintf "%s_rtn" x.name |> LabelName
 let computeMoves sgn il = 
-  let homes = assignHomes il
+  let homes = assignHomes sgn il
   let endLab = sgn |> getEndLab
   il 
   |> toGraph 
   |> fst 
-  |> Map.map (toAssignNode endLab homes |> konst) 
+  |> Map.map (toAssignNode endLab homes |> konst) ,homes
 
-let getCallLab (x:ASTSignature) = sprintf "%s_call" x.name |> LabelName
+let getCallLab (x:ASTSignature) = sprintf "%s" x.name |> LabelName
 
 let toAssembly = function 
-  | StackAdj i when i > 0 -> [AddA (Reg RSP, Imm i)]
-  | StackAdj i when i < 0 -> [SubA (Reg RSP, Imm i)]
+  | StackAdj i when i > 0 -> [AddA (Reg RSP, Imm (8 * i))]
+  | StackAdj i when i < 0 -> [SubA (Reg RSP, Imm (8 * -i))]
   | StackAdj i -> []
   | MovLoc (PostStack _, Reg r) -> [PushA r]
   | MovLoc (PostStack _, l) -> [ MovA (Reg R10, l); PushA R10 ]
-  | MovLoc (l1, l2) -> [ MovA (l1,l2) ]
+  | MovLoc (VarStack i, VarStack j) 
+     -> [MovA (Reg R10, VarStack j); 
+         MovA (VarStack i, Reg R10) ]
+  | MovLoc (l1,l2) -> [MovA (l1,l2)]
+  | MovLoc (VarStack i, PreStack j) 
+     -> [MovA (Reg R10, PreStack j); 
+         MovA (VarStack i, Reg R10) ]
+  | MovLoc (l1,l2) -> [MovA (l1,l2)]
 
 let getAssemblyForNode (n:AssignNode) = 
   (n.beforeMoves |> List.collect toAssembly )
   @ [n.instruction] 
   @ (n.afterMoves |> List.collect toAssembly)
+  
+
+type AsmModule = {funcs : (ASTSignature *  Map<Atom,Location> * Assembly list) list; 
+                  lits : (string * string) list}
+
+let assignMovesFunc sgn il = 
+  let nodes, homes = computeMoves sgn il 
+  let init = homes 
+          |> initialMoves (List.map toVar sgn.args)
+          |> Seq.collect toAssembly
+          |> Seq.toList
+  let body = nodes
+          |> mapValues 
+          |> List.collect getAssemblyForNode
+  sgn, homes, init @ body
+      
+let assignMovesToModules (x:FlattenedModule) = {
+  funcs = List.map (uncurry assignMovesFunc) x.funcs
+  lits = x.lits
+}
   

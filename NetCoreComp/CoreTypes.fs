@@ -37,12 +37,12 @@ let update k f = function
 
 let setIfAbsent k v = addOrUpdate k v id
 
-
+let mapValues k = Map.foldBack (fun _ v s -> v :: s ) k []
 let allKeys g = g |> Map.toSeq |> Seq.map fst 
 
 let printIter l = Seq.iter (printfn "%A") l
 
-
+let (|Even|Odd|) i = if i%2 =  0 then Even else Odd
 
 [<Literal>] 
 let PlusName = "_+"
