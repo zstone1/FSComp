@@ -13,16 +13,13 @@ open InjectMoves
 [<EntryPoint>]
 let main argv =
   try
-    let prgm = @"  public int main(){
-    int x = 2;
-    int y = bar(x);
-    return y + x;
-  } 
-  
-  public int bar(int asdf){
-    int x = asdf + 3;
-    return x;
-  }"
+    let prgm = @" 
+    public int main(){
+      string s = ""Args %i %i %i %i %i %i %i %i"";
+      printf(s,1,2,3,4,5,6,7,8);
+      return 8;
+    }"
+
     let p = prgm 
          |> parseProgram 
          |> convertModule

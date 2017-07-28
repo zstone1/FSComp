@@ -114,6 +114,7 @@ let assignHomes sgn il =
 //Hack to just use stack space for everything.
   il
   |> allVariables sgn
+  |> List.distinct
   |> List.indexed
   |> List.map (fun (i, v) -> (VarAtom v, VarStack i))
   |> Map.ofSeq

@@ -14,10 +14,10 @@ let rec serializeLocation (homes:Map<_,_>) =
   | Reg x -> (sprintf "%A" x).ToLowerInvariant()
   | Imm (i) -> i.ToString()
   | Data s -> s
-  | VarStack i -> 8 * (rspDepth - i - 1) |> sprintf "qword [rsp + %i]" //stackgrowsdown.com
-  | PreStack i as x-> printf "%A" x; 8* (rspDepth) + 8* i |> sprintf "qword [rsp + %i]" 
-  | WithOffSet (VarStack i) -> serializeLocation homes (VarStack (i+1))
-  | WithOffSet (PreStack i) -> serializeLocation homes (PreStack (i+1))
+  | VarStack i -> 8 * (rspDepth - (i + 1)) |> sprintf "qword [rsp + %i]" //stackgrowsdown.com
+  | PreStack i -> 8 * (rspDepth + 1 + (i+1)) |> sprintf "qword [rsp + %i]" 
+  | WithOffSet (VarStack i) -> serializeLocation homes (VarStack (i-1))
+  | WithOffSet (PreStack i) -> serializeLocation homes (PreStack (i-1))
   | WithOffSet x -> serializeLocation homes x
   | PostStack _ -> failf "Should not reference postStack this far"
 

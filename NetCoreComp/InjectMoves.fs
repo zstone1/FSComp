@@ -71,8 +71,8 @@ let getMoves endLab (homes: Map<_,_>) = function
                |> List.ofSeq
        let saveRtnToTemp = rtn |> Option.map (fun v -> MovLoc (Reg R11, Reg RAX)) |> Option.toList
        let saveRtnToHome = rtn |> Option.map (fun v -> MovLoc (homes.[VarAtom v], Reg R11)) |> Option.toList
-       let adjustStack = (StackAdj -(offsetStack + stackArgCount))
-       (StackAdj offsetStack) :: reqs , saveRtnToTemp @ [adjustStack] @ saveRtnToHome, CallA lab
+       let adjustStack = (StackAdj (offsetStack + stackArgCount))
+       (StackAdj -offsetStack) :: reqs , saveRtnToTemp @ [adjustStack] @ saveRtnToHome, CallA lab
 
 let toAssignNode endLab homes (c:CompNode) =
   let before, after, assem = getMoves endLab homes c.instruction
@@ -87,6 +87,7 @@ let toAssignNode endLab homes (c:CompNode) =
 let getEndLab (x:ASTSignature) = sprintf "%s_rtn" x.name |> LabelName
 let computeMoves sgn il = 
   let homes = assignHomes sgn il
+  do printf "%A" homes
   let endLab = sgn |> getEndLab
   il 
   |> toGraph 
