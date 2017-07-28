@@ -75,9 +75,10 @@ let homeRegisters = [R15; R14; R13; R12; R9; R8; RDI; RSI; RBP; RBX; RDX; RCX; R
 let callingRequirements stackPos (SplitAt 6 (l,r)) = 
   let regArgs = Seq.zip (List.map Reg callingRegs) l 
   let stackArgs = r
+               |> List.rev
                |> List.indexed
                |> List.map (fun (i,j) -> (i |> stackPos, j))
-  regArgs |> Seq.append stackArgs 
+  stackArgs |> Seq.append regArgs 
 
 let incomingArgReqs l = callingRequirements (PreStack) l
 

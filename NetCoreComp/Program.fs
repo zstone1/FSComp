@@ -13,12 +13,18 @@ open InjectMoves
 [<EntryPoint>]
 let main argv =
   try
-    let prgm = @" 
+    let prgm = @"
+    public int do(int i){
+      printf(""%i"",i);
+      return i;
+    }
+    public int foo(int a, int b, int c, int d, int e, int f, int h, int i){
+      return 0;
+    }
     public int main(){
-      string s = ""Args %i %i %i %i %i %i %i %i"";
-      printf(s,1,2,3,4,5,6,7,8);
-      return 8;
-    }"
+      return foo(do(1),do(2),do(3),do(4),do(5),do(6),do(7),do(8));
+    }
+    "
 
     let p = prgm 
          |> parseProgram 

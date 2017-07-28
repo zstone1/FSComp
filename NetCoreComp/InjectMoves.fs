@@ -87,7 +87,6 @@ let toAssignNode endLab homes (c:CompNode) =
 let getEndLab (x:ASTSignature) = sprintf "%s_rtn" x.name |> LabelName
 let computeMoves sgn il = 
   let homes = assignHomes sgn il
-  do printf "%A" homes
   let endLab = sgn |> getEndLab
   il 
   |> toGraph 
@@ -105,7 +104,6 @@ let toAssembly = function
   | MovLoc (VarStack i, VarStack j) 
      -> [MovA (Reg R10, VarStack j); 
          MovA (VarStack i, Reg R10) ]
-  | MovLoc (l1,l2) -> [MovA (l1,l2)]
   | MovLoc (VarStack i, PreStack j) 
      -> [MovA (Reg R10, PreStack j); 
          MovA (VarStack i, Reg R10) ]

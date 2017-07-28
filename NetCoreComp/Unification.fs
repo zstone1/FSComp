@@ -76,6 +76,8 @@ let private colorIL args =
 let private unifiedName i = sprintf "_unified_%i" i
 let private replaceVar (coloring:Map<_,_>) v = 
   coloring.[v] |> unifiedName |> VarName
+let private replaceVarOption (coloring:Map<_,_>) v = 
+  Map.tryFind v coloring |> Option.map (unifiedName >> VarName)
 let private replaceAtom coloring = function 
   | VarAtom v -> replaceVar coloring v |> VarAtom
   | x -> x
@@ -89,7 +91,7 @@ let private replaceAstVar (coloring :Map<_,_>) (v:ASTVariable) =
 let private unifyVars c = 
   mapInstruct 
     (replaceVar c) 
-    (replaceVar c |> Option.map)
+    (replaceVarOption c |> Option.bind)
     (replaceAtom c) 
     id
 
