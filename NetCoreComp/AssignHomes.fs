@@ -71,19 +71,21 @@ let callingRegs = [RDI;RSI;RDX;RCX;R8;R9]
 //The registers available to be homes for variables. 
 //What's missing is RSP (duh), and R10,R11. I am 
 //reserving these for swaping, temp storage, ect. 
-let homeRegisters = [R15; R14; R13; R12; R9; R8; RDI; RSI; RBP; RBX; RDX; RCX; RAX; RDI;]
+//Also the calling regs are missing to avoid conflicts
+//while handling parameters
+let homeRegisters = [R15; R14; R13; R12; RBP; RBX; RAX; ]
 let callingRequirements stackPos (SplitAt 6 (l,r)) = 
-  let regArgs = Seq.zip (List.map Reg callingRegs) l 
+  let regArgs = Seq.zip (List.map Reg callingRegs) l |> Seq.toList
   let stackArgs = r
                |> List.rev
                |> List.indexed
                |> List.map (fun (i,j) -> (i |> stackPos, j))
-  stackArgs |> Seq.append regArgs 
+  (regArgs, stackArgs)
 
 let incomingArgReqs l = callingRequirements (PreStack) l
 
 let incomingRequirements = function
-  | CallI (_, _, l) -> callingRequirements (PostStack) l
+  | CallI (_, _, l) -> callingRequirements (PostStack) l |> uncurry Seq.append
   | ReturnI v -> [Reg RAX, v] |> Seq.ofList
   | _ -> Seq.empty
 
@@ -109,21 +111,19 @@ let allVariables sgn il =
   let args = List.map toVar sgn.args
   inprgm @ args
   
-let assignHomes sgn il = 
+let assignHomesStackOnly sgn il = 
   let allVars = il |> allVariables sgn |> List.distinct 
   let homes = (Seq.initInfinite VarStack)// |> Seq.append (List.map Reg homeRegisters) 
 //  let affinities = il |> allAffinities
 //Hack to just use stack space for everything.
   Seq.zip allVars homes |> Map.ofSeq
 
-let getVarStackDepth homes =
-  homes 
-  |> Map.toSeq
-  |> Seq.map (snd >> function
-    | VarStack i -> i
-    | _ -> 0)
-  |> Seq.fold max 0
-  |> (+) 1
-  |> function 
-     | Even as i -> i
-     | Odd as i-> i + 1
+let assignHomesRegGreedy sgn il = 
+  let allVars = il |> allVariables sgn |> List.distinct 
+  let homes = (Seq.initInfinite VarStack) |> Seq.append (List.map Reg homeRegisters) 
+  Seq.zip allVars homes |> Map.ofSeq
+
+let assignHomes sgn il = 
+  match globalSettings.allocation with 
+  | StackOnly -> assignHomesStackOnly sgn il
+  | RegGreedy -> assignHomesRegGreedy sgn il

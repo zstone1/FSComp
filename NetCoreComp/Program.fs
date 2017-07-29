@@ -5,7 +5,6 @@ open Parser
 open ASTBuilder
 open Flatten
 open Assembly
-open Assignment
 open Unification
 open InjectMoves
 
@@ -14,17 +13,15 @@ open InjectMoves
 let main argv =
   try
     let prgm = @"
-  public int main(){
-    int x = 2;
-    int y = bar(x);
-    return y + x;
-  } 
-  
-  public int bar(int asdf){
-    int x = asdf + 3;
-    return x;
-  }"
-
+    public int main(){
+      int x = 1;
+      return x + foo(1,1,2,3,5,8);
+    }
+    
+    public int foo(int a, int b, int c, int d, int e, int f){
+      return a + b + c + d + e + f;
+    }"
+    globalSettings <- {allocation = RegGreedy}
     let p = prgm 
          |> parseProgram 
          |> convertModule

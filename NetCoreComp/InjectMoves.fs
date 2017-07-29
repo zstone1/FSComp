@@ -7,7 +7,7 @@ open ComputationGraph
 open AssignHomes
 open FSharpx.State
 
-type Move = StackAdj of int | MovLoc of Location * Location
+type Move = StackAdj of int | MovLoc of Location * Location | PushM of Register | PopM of Register
 
 type Assembly = 
   | CmpA of Location * Location
@@ -23,7 +23,7 @@ type Assembly =
   | PopA of Register
   | RetA
   | SyscallA
-  | NOP
+  | Nop
 
 type AssignNode = {
   id : int
@@ -33,17 +33,34 @@ type AssignNode = {
   afterMoves : Move list
 }
 
+let getSaveRegs homes regs = 
+  homes 
+  |> mapValues
+  |> List.choose (function Reg x -> Some x | _ -> None)
+  |> Set.ofList
+  |> Set.intersect (regs |> Set.ofList)
+  |> Set.toList
 
 let toLoc (homes:Map<_,_>) = function 
   | VarAtom v -> homes.[v]
   | DataRefAtom v -> Data v
   | IntLitAtom i -> Imm i
 
+let calleeSave = [RBP; RBX; R12; R13; R14; R15]
 //todo: save caller save registers.
+
+
 let initialMoves args (homes: Map<_,_>) = 
   args 
   |> incomingArgReqs
+  |> (List.append |> uncurry)
   |> Seq.map (fun (l,v) -> MovLoc (homes.[v], l))
+  
+
+let private callerSave = [RAX; RDI; RSI; RDX; RCX; R8; R9; R10; R11;] 
+
+
+
 
 let private movToReg (homes: Map<_,_>) arith var atom = 
   let varHome = homes.[var]
@@ -58,21 +75,33 @@ let getMoves endLab (homes: Map<_,_>) = function
   | JmpI l -> [],[],JmpA l
   | JnzI l -> [],[],JnzA l
   | LabelI l -> [],[],LabelA l
-  | AssignI (var, at) -> [],[MovLoc(homes.[var], at |> toLoc homes )],NOP 
+  | AssignI (var, at) -> [],[MovLoc(homes.[var], at |> toLoc homes )],Nop 
   | ReturnI v -> [MovLoc (Reg RAX, v |> toLoc homes)],[], JmpA endLab
   | CallI (rtn, lab, args) 
     //This assumes that the normal rsp offset is even
-    -> let stackArgCount = max (List.length args - 6) 0
-       let offsetStack = ((stackArgCount + 1) % 2)
-       let offsetMod = match offsetStack with 0 -> id | _ -> fun x -> WithOffSet (1,x)
-       let reqs = args 
-               |> callingRequirements PostStack 
-               |> Seq.map (fun (x,y) -> MovLoc (x, y |> toLoc homes |> offsetMod)) 
-               |> List.ofSeq
+    -> 
+       let regArgs, stackArgs = args |> callingRequirements PostStack 
+       let regsToSave = getSaveRegs homes callerSave
+
+       let stackChange = stackArgs.Length + regsToSave.Length
+       let alignment = ((stackChange + 1) % 2) //Calling convention requires stack alligned to 8%16 when called
+       let offsetMod i x =  WithOffSet (regsToSave.Length + i + alignment,x)
+
+       let toMovWithMod i (x, y) = MovLoc (x, y |> toLoc homes |> offsetMod i)
+       let regArgMoves = regArgs |> List.map (toMovWithMod stackArgs.Length)
+       let stackArgMoves = stackArgs |> List.mapi toMovWithMod
+
+       let saveRegs = regsToSave |> List.map (fun r -> MovLoc (PostStack 0, Reg r))
+       let restoreRegs = regsToSave |> List.rev |> List.map (fun r -> MovLoc (Reg r, PostStack 0))
+
        let saveRtnToTemp = rtn |> Option.map (fun v -> MovLoc (Reg R11, Reg RAX)) |> Option.toList
        let saveRtnToHome = rtn |> Option.map (fun v -> MovLoc (homes.[v], Reg R11)) |> Option.toList
-       let adjustStack = (StackAdj (offsetStack + stackArgCount))
-       (StackAdj -offsetStack) :: reqs , saveRtnToTemp @ [adjustStack] @ saveRtnToHome, CallA lab
+       let adjustStack = (StackAdj (alignment + stackArgs.Length))
+
+       let setupCall = saveRegs @ [StackAdj -alignment] @ stackArgMoves @ regArgMoves
+       let afterCall = saveRtnToTemp @ [adjustStack] @ restoreRegs @ saveRtnToHome
+
+       setupCall, afterCall, CallA lab
 
 let toAssignNode endLab homes (c:CompNode) =
   let before, after, assem = getMoves endLab homes c.instruction
@@ -101,13 +130,22 @@ let toAssembly = function
   | StackAdj i -> []
   | MovLoc (PostStack _, Reg r) -> [PushA r]
   | MovLoc (PostStack _, l) -> [ MovA (Reg R10, l); PushA R10 ]
+
   | MovLoc (VarStack i, VarStack j) 
      -> [MovA (Reg R10, VarStack j); 
          MovA (VarStack i, Reg R10) ]
+
   | MovLoc (VarStack i, PreStack j) 
      -> [MovA (Reg R10, PreStack j); 
          MovA (VarStack i, Reg R10) ]
+
+  | MovLoc (Reg r, PostStack _)
+      -> [PopA (r)]
+
   | MovLoc (l1,l2) -> [MovA (l1,l2)]
+  | PushM r -> [PushA r]
+  | PopM r -> [PopA r]
+
 
 let getAssemblyForNode (n:AssignNode) = 
   (n.beforeMoves |> List.collect toAssembly )
@@ -134,3 +172,11 @@ let assignMovesToModules (x:FlattenedModule) = {
   lits = x.lits
 }
   
+let saveCalleeRegs homes = getSaveRegs homes calleeSave 
+                        |> List.map PushM 
+                        |> List.collect toAssembly
+
+let restoreCalleeRegs homes = getSaveRegs homes calleeSave 
+                           |> List.rev 
+                           |> List.map PopM 
+                           |> List.collect toAssembly

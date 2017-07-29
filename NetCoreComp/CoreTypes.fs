@@ -6,6 +6,15 @@ open FSharpx.State
 exception CompilerError of string with 
   override x.ToString() = sprintf "Failed to compile %A" x.Data0
 
+type RegAlloctionType = StackOnly | RegGreedy
+
+type Settings = {
+  allocation : RegAlloctionType
+}
+let mutable globalSettings = {
+  allocation = StackOnly
+}
+
 
 let public failComp s = raise (CompilerError s)
 let public failf a = Printf.kprintf failComp a

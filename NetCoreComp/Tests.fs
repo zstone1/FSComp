@@ -2,7 +2,6 @@
 open FParsec
 open Parser
 open NUnit.Framework
-open Assignment
 open Flatten
 open Assembly
 open ASTBuilder
@@ -42,11 +41,21 @@ let executeInDir testDir prgm=
 
 let execute = executeInDir TestContext.CurrentContext.Test.Name 
 
-let checkval (f: _ -> 'a) (i:'a) s = 
+let checkvalForSettings (f: _ -> 'a) (i:'a) s settings = 
   try 
-    Assert.AreEqual(i, s |> execute |> f)
+    globalSettings <- settings
+    Assert.AreEqual(i, s |> execute |> f, sprintf "%A" settings)
   with 
-    | CompilerError e -> Assert.Fail("Compilation failed: " + e)
+    | CompilerError e -> Assert.Fail(sprintf " Settings %A: Compilation failed: %s " settings e)
+
+let settingsOpts = [
+  {allocation = RegGreedy}
+  {allocation = StackOnly}
+]
+
+let checkval (f:_ -> 'a) (i:'a) s = 
+  List.iter (checkvalForSettings f i s) settingsOpts
+
   
 let check = checkval id 
 let checkCode = checkval fst

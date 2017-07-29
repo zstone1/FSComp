@@ -8,14 +8,37 @@ open AssignHomes
 open ASTBuilder
 open FSharpx.State
  
+let getVarStackDepth homes =
+  Seq.sumBy (snd >> function
+    | VarStack i -> 1
+    | _ -> 0) (homes 
+  |> Map.toSeq)
+
+let getSavedVariableDepth homes =
+  homes 
+  |> (getSaveRegs |> flip) calleeSave
+  |> List.length
+
+let getAlignmentAdjust homes = 
+  let size = getVarStackDepth homes
+           + getSavedVariableDepth homes
+  size % 2
+
 let rec serializeLocation (homes:Map<_,_>) = 
   let rspDepth = getVarStackDepth homes 
   function 
   | Reg x -> (sprintf "%A" x).ToLowerInvariant()
   | Imm (i) -> i.ToString()
   | Data s -> s
-  | VarStack i -> 8 * (rspDepth - (i + 1)) |> sprintf "qword [rsp + %i]" //stackgrowsdown.com
-  | PreStack i -> 8 * (rspDepth + 1 + (i+1)) |> sprintf "qword [rsp + %i]" 
+  | VarStack i -> (rspDepth - (i + 1)) 
+               |> (*) 8
+               |> sprintf "qword [rsp + %i]" //stackgrowsdown.com
+  | PreStack i -> rspDepth 
+               |> (+) (getSavedVariableDepth homes) //saved variables
+               |> (+) (getAlignmentAdjust homes) //16 bit alignment adjust
+               |> (+) 1 //rtn ptr
+               |> (*) 8
+               |> sprintf "qword [rsp + %i]" 
   | WithOffSet (offset, VarStack i) -> serializeLocation homes (VarStack (i-offset))
   | WithOffSet (offset, PreStack i) -> serializeLocation homes (PreStack (i-offset))
   | WithOffSet (_,x) -> serializeLocation homes x
@@ -41,19 +64,23 @@ let serializeInstruction st =
   | RetA -> handleOp0 "ret"
   | PushA l -> handleOp1Loc "push" (Reg l)
   | PopA l -> handleOp1Loc "pop" (Reg l)
-  | NOP -> ""
+  | Nop -> ""
 
 
+let introOutroAdj homes = getVarStackDepth homes + getAlignmentAdjust homes
+let intro sgn homes = 
+  LabelA (sgn |> getCallLab)
+  :: saveCalleeRegs homes
+  @ [ SubA (Reg RSP, Imm ( 8 * introOutroAdj homes))]
+let outro sgn homes =
+  [
+    LabelA (sgn |> getEndLab); 
+    AddA (Reg RSP, Imm (8 * introOutroAdj homes));
+  ]
+  @ restoreCalleeRegs homes
+  @[ RetA]
 
-let intro sgn homes = [
-  LabelA (sgn |> getCallLab); 
-  SubA (Reg RSP, Imm ( 8 * getVarStackDepth homes))]
-let outro sgn homes = [
-  LabelA (sgn |> getEndLab); 
-  AddA (Reg RSP, Imm (8 * getVarStackDepth homes));
-  RetA]
-
-let funcToInstructions sgn homes instrs = 
+let funcToInstructions (sgn, homes, instrs) = 
   intro sgn homes @ instrs@ outro sgn homes
   |> List.map (serializeInstruction homes)
   |> String.concat "\n"
@@ -67,7 +94,7 @@ let escapeString = function
 
 let toDataLabel (lab, s) = sprintf "%s:\n        db     `%s`, 10, 0" lab (String.collect escapeString s)
 let serializeModule {AsmModule.funcs = fs; lits = l} = 
-  let prgm = fs |> List.map (uncurry3 funcToInstructions)
+  let prgm = fs |> List.map funcToInstructions
   let data = l |> List.map toDataLabel 
   let initialize = "        global main\n        extern printf\n        section .text"
   initialize :: prgm @ data |> Seq.filter ((<>)"") |> String.concat "\n"
