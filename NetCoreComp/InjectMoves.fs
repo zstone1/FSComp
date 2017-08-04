@@ -8,27 +8,31 @@ open AssignHomes
 open FSharpx.State
 open Option
 
-type Homes = Map<Variable, Location>
+type Homes = Map<Variable, Location<unit>>
+
+type Offset = 
+  | FromHome of int
+  | FromInit of int
 type Move = 
   | StackAdj of int 
-  | MovLoc of Location * Location 
-  | Xchg of Location * Location
+  | MovLoc of Location<Offset> * Location<Offset>
+  | Xchg of Location<Offset> * Location<Offset>
   | PushM of Register 
   | PopM of Register
 
 type Assembly = 
-  | CmpA of Location * Location
-  | MovA of Location * Location
+  | CmpA of Location<Offset> * Location<Offset>
+  | MovA of Location<Offset> * Location<Offset>
   | JnzA of LabelMarker
   | JmpA of LabelMarker
   | LabelA of LabelMarker
-  | AddA of Location * Location
-  | SubA of Location * Location
-  | IMulA of Location * Location
+  | AddA of Location<Offset> * Location<Offset>
+  | SubA of Location<Offset> * Location<Offset>
+  | IMulA of Location<Offset> * Location<Offset>
   | CallA of LabelMarker
   | PushA of Register
   | PopA of Register
-  | XchgA of Location * Location
+  | XchgA of Location<Offset> * Location<Offset>
   | RetA
   | SyscallA
   | Nop
@@ -75,26 +79,35 @@ let toLoc (homes:Homes) = function
 
 let calleeSave = [RBP; RBX; R12; R13; R14; R15]
 
+let withOffset o = function 
+  | Reg r -> Reg r
+  | Imm i -> Imm i
+  | Data d -> Data d
+  | Stack (s,_) -> Stack(s,o)
+
 let initialMoves args (homes: Homes) = 
   let regArgs, stackArgs = incomingArgReqs args
-  let desiredRegLocs = regArgs |> List.map ((fun (_,v) -> v, homes.[v]) >> swap)
-  let currentLocs = (regArgs |> List.map (fun (r,v) -> (Reg r, v))) @ stackArgs
+  let desiredRegLocs = regArgs |> List.map ((fun (_,v) -> ((homes.[v] |> withOffset (FromInit 0))), v) )
+  let currentLocs = (regArgs |> List.map (fun (r,v) -> (Reg r, v))) @ (stackArgs |> List.map (fun (s,v) -> (Stack(s,FromInit 0),v)))
   let regMoves = desiredRegLocs |> moveManyIntoRegs (fun i -> failComp "only variables are args") currentLocs
-  let stackMoves = stackArgs |> List.map (fun (l,v) -> MovLoc (homes.[v], l))
+  let stackMoves = stackArgs |> List.map (fun (l,v) -> MovLoc (homes.[v] |> withOffset (FromInit 0), Stack (l, FromInit 0)))
   regMoves @ stackMoves
-//  args 
-//  |> incomingArgReqs
-//  |> (List.append |> uncurry)
-//  |> Seq.map (fun (l,v) -> MovLoc (homes.[v], l))
   
 
 let private callerSave = [RAX; RDI; RSI; RDX; RCX; R8; R9; R10; R11;] 
 
+let toLocNoOffset homes = toLoc homes >> withOffset (FromHome 0)
 let private movToReg (homes: Homes) arith var atom = 
   let varHome = homes.[var]
   match varHome with
-  | Reg r -> [],[], arith (Reg r, atom |> toLoc homes)
-  | x -> [MovLoc(Reg R11, x)],[MovLoc(x, Reg R11)], arith (Reg R11, atom |> toLoc homes)
+  | Reg r -> [],[], arith (Reg r, atom |> toLocNoOffset homes )
+  | x -> let before = [MovLoc(Reg R11, x |> withOffset (FromHome 0))]
+         let after = [MovLoc(x |> withOffset (FromHome 0), Reg R11)]
+         let work =  arith (Reg R11, atom |> toLocNoOffset homes)
+         before, after, work
+
+         
+
 let getMoves endLab (homes: Homes) = function
   | AddI (var,at) -> movToReg homes AddA var at
   | SubI (var,at)  -> movToReg homes SubA var at
@@ -103,8 +116,8 @@ let getMoves endLab (homes: Homes) = function
   | JmpI l -> [],[],JmpA l
   | JnzI l -> [],[],JnzA l
   | LabelI l -> [],[],LabelA l
-  | AssignI (var, at) -> [],[MovLoc(homes.[var], at |> toLoc homes )],Nop 
-  | ReturnI v -> [MovLoc (Reg RAX, v |> toLoc homes)],[], JmpA endLab
+  | AssignI (var, at) -> [],[MovLoc(VarAtom var |> toLocNoOffset homes, at |> toLocNoOffset homes)],Nop 
+  | ReturnI v -> [MovLoc (Reg RAX, v |> toLocNoOffset homes)],[], JmpA endLab
   | CallI (rtn, lab, args) 
     //This assumes that the normal rsp offset is even
     -> 

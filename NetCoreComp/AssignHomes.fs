@@ -56,15 +56,16 @@ type Register =
   | R14
   | R15
 
+type StackLoc = 
+  | PreStack of int
+  | VarStack of int
+  | PostStack of int
 
-type Location = 
+type Location<'t> = 
   | Reg of Register
   | Data of string
-  | PreStack of int
   | Imm of int
-  | PostStack of int
-  | WithOffSet of int * Location
-  | VarStack of int
+  | Stack of StackLoc * 't
 
  
 let callingRegs = [RDI;RSI;RDX;RCX;R8;R9] 
@@ -86,7 +87,7 @@ let incomingArgReqs l = callingRequirements (PreStack) l
 
 let getInstrAffinity = function
   | CallI (v, _, l)
-    -> let regArgs, stackArgs = callingRequirements (PostStack) l 
+    -> let regArgs, stackArgs = callingRequirements (fun i -> Stack (PostStack i,())) l 
        let rtn = v |> Option.map (fun i -> (Reg RAX, VarAtom i)) |> Option.toList
        rtn @ (List.map (fun (i,j) -> (Reg i, j)) regArgs) @ stackArgs
        
@@ -111,14 +112,12 @@ let allVariables sgn il =
   
 let assignHomesStackOnly sgn il = 
   let allVars = il |> allVariables sgn |> List.distinct 
-  let homes = (Seq.initInfinite VarStack)// |> Seq.append (List.map Reg homeRegisters) 
-//  let affinities = il |> allAffinities
-//Hack to just use stack space for everything.
+  let homes = Seq.initInfinite (fun i -> Stack (VarStack i, ()))
   Seq.zip allVars homes |> Map.ofSeq
 
 let assignHomesRegGreedy sgn il = 
   let allVars = il |> allVariables sgn |> List.distinct 
-  let homes = (Seq.initInfinite VarStack) |> Seq.append (List.map Reg homeRegisters) 
+  let homes = (Seq.initInfinite (fun i -> Stack (VarStack i ,()))) |> Seq.append (List.map Reg homeRegisters) 
   Seq.zip allVars homes |> Map.ofSeq
 
 let assignHomes sgn il = 
