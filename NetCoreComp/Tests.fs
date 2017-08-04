@@ -310,3 +310,19 @@ let ``unreferenced param`` () = checkCode 1 @"
     public int Foo(int i){
       return 2;
     }"
+[<Test>]
+let ``swapparams`` () = checkCode 4 @"
+    public int main(){
+      int x = 1;
+      int y = 5;
+      return Foo(x,y);
+    }
+
+    public int Foo(int i, int j){
+      return Bar(j,i);
+    }
+    
+    public int Bar(int i, int j){
+      return i - j;
+    }
+    "

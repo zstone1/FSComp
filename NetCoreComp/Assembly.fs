@@ -24,7 +24,7 @@ let getAlignmentAdjust homes =
            + getSavedVariableDepth homes
   size % 2
 
-let rec serializeLocation (homes:Map<_,_>) = 
+let rec serializeLocation (homes: Homes) = 
   let rspDepth = getVarStackDepth homes 
   function 
   | Reg x -> (sprintf "%A" x).ToLowerInvariant()
@@ -64,6 +64,7 @@ let serializeInstruction st =
   | RetA -> handleOp0 "ret"
   | PushA l -> handleOp1Loc "push" (Reg l)
   | PopA l -> handleOp1Loc "pop" (Reg l)
+  | XchgA (l1,l2) -> handleOp2 "xchg" l1 l2
   | Nop -> ""
 
 

@@ -30,6 +30,9 @@ let suffixes l =
       | _::ys -> (x,ys)::rtn, ys
   List.fold accum ([],l) l |> fst |> List.rev
 
+let separate f l = 
+  List.fold (fun (y,n) x -> if f x then (x::y, n) else (y,x::n)) ([],[]) l
+
 let cons x xs = x :: xs
 
 let (|Present|_|) v m = 

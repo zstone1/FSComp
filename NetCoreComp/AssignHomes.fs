@@ -73,9 +73,9 @@ let callingRegs = [RDI;RSI;RDX;RCX;R8;R9]
 //reserving these for swaping, temp storage, ect. 
 //Also the calling regs are missing to avoid conflicts
 //while handling parameters
-let homeRegisters = [R15; R14; R13; R12; RBP; RBX; RAX; ]
+let homeRegisters = callingRegs @ [R15; R14; R13; R12; RBP; RBX; RAX; ]
 let callingRequirements stackPos (SplitAt 6 (l,r)) = 
-  let regArgs = Seq.zip (List.map Reg callingRegs) l |> Seq.toList
+  let regArgs = Seq.zip callingRegs l |> Seq.toList
   let stackArgs = r
                |> List.rev
                |> List.indexed
@@ -84,18 +84,16 @@ let callingRequirements stackPos (SplitAt 6 (l,r)) =
 
 let incomingArgReqs l = callingRequirements (PreStack) l
 
-let incomingRequirements = function
-  | CallI (_, _, l) -> callingRequirements (PostStack) l |> uncurry Seq.append
-  | ReturnI v -> [Reg RAX, v] |> Seq.ofList
-  | _ -> Seq.empty
+let getInstrAffinity = function
+  | CallI (v, _, l)
+    -> let regArgs, stackArgs = callingRequirements (PostStack) l 
+       let rtn = v |> Option.map (fun i -> (Reg RAX, VarAtom i)) |> Option.toList
+       rtn @ (List.map (fun (i,j) -> (Reg i, j)) regArgs) @ stackArgs
+       
+  | ReturnI v -> [Reg RAX, v] 
+  | _ -> []
 
-let outgoingRequirements = function
-  | CallI (Some v, _,_) -> [(Reg RAX, VarAtom v)] |> Seq.ofList
-  | _ -> Seq.empty
-
-let private getAfinity (compNode:CompNode) = 
-  Seq.append (incomingRequirements compNode.instruction) (outgoingRequirements compNode.instruction)
-
+let private getAfinity (compNode:CompNode) = (getInstrAffinity compNode.instruction) 
 
 let private allAffinities il = 
   il 

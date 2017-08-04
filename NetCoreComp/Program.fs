@@ -12,15 +12,21 @@ open InjectMoves
 [<EntryPoint>]
 let main argv =
   try
-    let prgm = @"
+    let prgm =  @"
     public int main(){
       int x = 1;
-      return x + foo(1,1,2,3,5,8);
+      int y = 5;
+      return Foo(x,y);
+    }
+
+    public int Foo(int i, int j){
+      return Bar(j,i);
     }
     
-    public int foo(int a, int b, int c, int d, int e, int f){
-      return a + b + c + d + e + f;
-    }"
+    public int Bar(int i, int j){
+      return i - j;
+    }
+    "
     globalSettings <- {allocation = RegGreedy}
     let p = prgm 
          |> parseProgram 
