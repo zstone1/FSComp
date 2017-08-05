@@ -10,7 +10,7 @@ open FSharpx.State
  
 let getVarStackDepth homes =
   Seq.sumBy (snd >> function
-    | VarStack i -> 1
+    | Stack(VarStack i,_) -> 1
     | _ -> 0) (homes 
   |> Map.toSeq)
 
@@ -25,24 +25,24 @@ let getAlignmentAdjust homes =
   size % 2
 
 let rec serializeLocation (homes: Homes) = 
-  let rspDepth = getVarStackDepth homes 
+  let homeDepth = getVarStackDepth homes + getSavedVariableDepth homes + getAlignmentAdjust homes
   function 
   | Reg x -> (sprintf "%A" x).ToLowerInvariant()
   | Imm (i) -> i.ToString()
   | Data s -> s
-  | VarStack i -> (rspDepth - (i + 1)) 
-               |> (*) 8
-               |> sprintf "qword [rsp + %i]" //stackgrowsdown.com
-  | PreStack i -> rspDepth 
-               |> (+) (getSavedVariableDepth homes) //saved variables
-               |> (+) (getAlignmentAdjust homes) //16 bit alignment adjust
-               |> (+) 1 //rtn ptr
-               |> (*) 8
-               |> sprintf "qword [rsp + %i]" 
-  | WithOffSet (offset, VarStack i) -> serializeLocation homes (VarStack (i-offset))
-  | WithOffSet (offset, PreStack i) -> serializeLocation homes (PreStack (i-offset))
-  | WithOffSet (_,x) -> serializeLocation homes x
-  | PostStack _ -> failf "Should not reference postStack this far"
+  | Stack(VarStack i, o) 
+    -> (match o with | FromHome s -> homeDepth + s )
+    |> fun x -> x - (i + 1) 
+    |> (*) 8
+//    |> (+) (match o with FromHome)
+    |> sprintf "qword [rsp + %i]" //stackgrowsdown.com
+  | Stack(PreStack i,o) 
+    -> (match o with | FromHome s -> homeDepth + s )
+    |> (+) i
+    |> (+) 1 //rtn ptr
+    |> (*) 8
+    |> sprintf "qword [rsp + %i]" 
+  | Stack(PostStack _,_) -> failf "Should not reference postStack this far"
 
 let serializeInstruction st = 
   let serialize = serializeLocation st

@@ -75,19 +75,18 @@ let callingRegs = [RDI;RSI;RDX;RCX;R8;R9]
 //Also the calling regs are missing to avoid conflicts
 //while handling parameters
 let homeRegisters = callingRegs @ [R15; R14; R13; R12; RBP; RBX; RAX; ]
-let callingRequirements stackPos (SplitAt 6 (l,r)) = 
+let callingRequirements toRev stackPos (SplitAt 6 (l,r)) = 
   let regArgs = Seq.zip callingRegs l |> Seq.toList
   let stackArgs = r
-               |> List.rev
-               |> List.indexed
-               |> List.map (fun (i,j) -> (i |> stackPos, j))
+               |> (if toRev then List.rev else id)
+               |> List.mapi (fun i j -> (i |> stackPos, j))
   (regArgs, stackArgs)
 
-let incomingArgReqs l = callingRequirements (PreStack) l
+let incomingArgReqs l = callingRequirements false (PreStack) l
 
 let getInstrAffinity = function
   | CallI (v, _, l)
-    -> let regArgs, stackArgs = callingRequirements (fun i -> Stack (PostStack i,())) l 
+    -> let regArgs, stackArgs = callingRequirements false (fun i -> Stack (PostStack i,())) l 
        let rtn = v |> Option.map (fun i -> (Reg RAX, VarAtom i)) |> Option.toList
        rtn @ (List.map (fun (i,j) -> (Reg i, j)) regArgs) @ stackArgs
        
@@ -120,7 +119,28 @@ let assignHomesRegGreedy sgn il =
   let homes = (Seq.initInfinite (fun i -> Stack (VarStack i ,()))) |> Seq.append (List.map Reg homeRegisters) 
   Seq.zip allVars homes |> Map.ofSeq
 
+let assignHomesAffinity sgn il = 
+  let allVars = il |> allVariables sgn |> List.distinct 
+  let affinities = allAffinities il
+  let affs =  state {
+    for v in allVars do 
+      let! available, current, stack = getState
+      match affinities, available with 
+      | Present (VarAtom v) l, _ when List.contains l available
+        -> let newAvail = List.except [l] available
+           let newCurrent = Map.add v l current
+           do! putState (newAvail, newCurrent, stack)
+      | _, x::xs 
+        -> do! putState (xs, Map.add v x current, stack)
+      | _, []
+        -> let newCurrent =  Map.add v (Stack (VarStack stack,())) current
+           do! putState ([], newCurrent, stack + 1)
+  }
+  let _, x, _ = exec affs (List.map Reg homeRegisters, Map.empty, 0)
+  x
+
 let assignHomes sgn il = 
   match globalSettings.allocation with 
   | StackOnly -> assignHomesStackOnly sgn il
   | RegGreedy -> assignHomesRegGreedy sgn il
+  | AffineGreedy -> assignHomesAffinity sgn il

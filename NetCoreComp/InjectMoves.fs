@@ -12,7 +12,7 @@ type Homes = Map<Variable, Location<unit>>
 
 type Offset = 
   | FromHome of int
-  | FromInit of int
+
 type Move = 
   | StackAdj of int 
   | MovLoc of Location<Offset> * Location<Offset>
@@ -60,7 +60,7 @@ let rec moveManyIntoRegs' f current desired =
     -> let currentLoc = current |> List.tryFind (snd >> (=) v) |> map fst |> defaultWith (fun () -> f v) 
        match current |> List.tryFind (fst >> (=) r) with
        | None -> MovLoc (r, currentLoc) :: moveManyIntoRegs' f current rest
-       | Some (_,x) -> Xchg (r, currentLoc) :: moveManyIntoRegs' f (List.map (replace x r) current) rest
+       | Some (k,x) -> Xchg (r, currentLoc) :: moveManyIntoRegs' f (List.map (replace x r) current) rest
 
 let moveManyIntoRegs f current desired = moveManyIntoRegs' f current (reorder current desired)
 
@@ -87,10 +87,10 @@ let withOffset o = function
 
 let initialMoves args (homes: Homes) = 
   let regArgs, stackArgs = incomingArgReqs args
-  let desiredRegLocs = regArgs |> List.map ((fun (_,v) -> ((homes.[v] |> withOffset (FromInit 0))), v) )
-  let currentLocs = (regArgs |> List.map (fun (r,v) -> (Reg r, v))) @ (stackArgs |> List.map (fun (s,v) -> (Stack(s,FromInit 0),v)))
+  let desiredRegLocs = regArgs |> List.map ((fun (_,v) -> ((homes.[v] |> withOffset (FromHome 0))), v) )
+  let currentLocs = (regArgs |> List.map (fun (r,v) -> (Reg r, v))) @ (stackArgs |> List.map (fun (s,v) -> (Stack(s,(FromHome 0)),v)))
   let regMoves = desiredRegLocs |> moveManyIntoRegs (fun i -> failComp "only variables are args") currentLocs
-  let stackMoves = stackArgs |> List.map (fun (l,v) -> MovLoc (homes.[v] |> withOffset (FromInit 0), Stack (l, FromInit 0)))
+  let stackMoves = stackArgs |> List.map (fun (l,v) -> MovLoc (homes.[v] |> withOffset (FromHome 0), Stack (l, FromHome 0)))
   regMoves @ stackMoves
   
 
@@ -106,8 +106,6 @@ let private movToReg (homes: Homes) arith var atom =
          let work =  arith (Reg R11, atom |> toLocNoOffset homes)
          before, after, work
 
-         
-
 let getMoves endLab (homes: Homes) = function
   | AddI (var,at) -> movToReg homes AddA var at
   | SubI (var,at)  -> movToReg homes SubA var at
@@ -121,25 +119,29 @@ let getMoves endLab (homes: Homes) = function
   | CallI (rtn, lab, args) 
     //This assumes that the normal rsp offset is even
     -> 
-       let regArgs, stackArgs = args |> callingRequirements PostStack 
+       let regArgs, stackArgs = args |> callingRequirements true PostStack 
        let regsToSave = getSaveRegs homes callerSave
 
        let stackChange = stackArgs.Length + regsToSave.Length
-       let alignment = ((stackChange + 1) % 2) //Calling convention requires stack alligned to 8%16 when called
-       let offsetMod i x =  WithOffSet (regsToSave.Length + i + alignment,x)
+       let alignment = if stackChange % 2 = 0 then 1 else 0  //Calling convention requires stack alligned to 8%16 when called
+       let offsetMod i =  withOffset (FromHome (regsToSave.Length +  alignment + i))
 
-       let toMovWithMod i (x, y) = MovLoc (x, y |> toLoc homes |> offsetMod i)
-       let regArgLocations = homes |> Map.map (fun _ i -> WithOffSet (regsToSave.Length + alignment + stackArgs.Length, i)) |> Map.toList
+       //regs are moved after the stack is set, so the offsetMod is the full stackArgs.
+       let regArgLocations = homes |> Map.map (konst <| offsetMod stackArgs.Length) |> Map.toList 
        let regArgMoves = regArgs 
-                      |> List.map (fun (i,j) -> (Reg i, j))
-                      |> moveManyIntoRegs (toLoc homes) (regArgLocations |> List.map (fun (i,j) -> (j, VarAtom i)))
+                      |> List.map (fst_set Reg)
+                      |> moveManyIntoRegs 
+                           (toLoc homes >> offsetMod stackArgs.Length) 
+                           (regArgLocations |> List.map (swap >> snd_set VarAtom ))
+
+       let toMovWithMod i (x, y) = MovLoc (Stack (x, ()) |> offsetMod i, y |> toLoc homes |> offsetMod i)
        let stackArgMoves = stackArgs |> List.mapi toMovWithMod
 
-       let saveRegs = regsToSave |> List.map (fun r -> MovLoc (PostStack 0, Reg r))
-       let restoreRegs = regsToSave |> List.rev |> List.map (fun r -> MovLoc (Reg r, PostStack 0))
+       let saveRegs = regsToSave |> List.map PushM 
+       let restoreRegs = regsToSave |> List.rev |> List.map PopM
 
        let saveRtnToTemp = rtn |> Option.map (fun v -> MovLoc (Reg R11, Reg RAX)) |> Option.toList
-       let saveRtnToHome = rtn |> Option.map (fun v -> MovLoc (homes.[v], Reg R11)) |> Option.toList
+       let saveRtnToHome = rtn |> Option.map (fun v -> MovLoc (homes.[v] |> withOffset (FromHome 0), Reg R11)) |> Option.toList
        let adjustStack = (StackAdj (alignment + stackArgs.Length))
 
        let setupCall = saveRegs @ [StackAdj -alignment] @ stackArgMoves @ regArgMoves
@@ -172,26 +174,24 @@ let toAssembly = function
   | StackAdj i when i > 0 -> [AddA (Reg RSP, Imm (8 * i))]
   | StackAdj i when i < 0 -> [SubA (Reg RSP, Imm (8 * -i))]
   | StackAdj i -> []
-  | MovLoc (PostStack _, Reg r) -> [PushA r]
-  | MovLoc (PostStack _, l) -> [ MovA (Reg R10, l); PushA R10 ]
+  | MovLoc (Stack (PostStack _,_), Reg r) -> [PushA r]
+  | MovLoc (Stack (PostStack _,_), l) -> [ MovA (Reg R10, l); PushA R10 ]
 
-  | MovLoc (VarStack i, VarStack j) 
-     -> [MovA (Reg R10, VarStack j); 
-         MovA (VarStack i, Reg R10) ]
+  | MovLoc (Stack (a,b), Stack(c,d)) 
+     -> [MovA (Reg R10, Stack(c,d)) 
+         MovA (Stack(a,b), Reg R10) ]
 
-  | MovLoc (VarStack i, PreStack j) 
-     -> [MovA (Reg R10, PreStack j); 
-         MovA (VarStack i, Reg R10) ]
-
-  | MovLoc (Reg r, PostStack _)
+  | MovLoc (Reg r, Stack (PostStack _,_))
       -> [PopA (r)]
 
   | MovLoc (l1,l2) -> [MovA (l1,l2)]
   | PushM r -> [PushA r]
   | PopM r -> [PopA r]
+  | Xchg (Reg r, Imm i) | Xchg (Imm i, Reg r) -> [MovA (Reg r, Imm i)]
+  | Xchg (Reg r, Data d) | Xchg (Data d, Reg r) -> [MovA (Reg r, Data d)]
   | Xchg (Reg r, l) -> [XchgA (Reg r, l)]
   | Xchg (l, Reg r) -> [XchgA (l, Reg r)]
-  | Xchg (_, _) -> failComp "exchanging bad things";
+  | Xchg (a,b) -> failComp "exchanging bad things %A, %A" a b;
 
 
 let getAssemblyForNode (n:AssignNode) = 

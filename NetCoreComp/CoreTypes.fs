@@ -6,7 +6,7 @@ open FSharpx.State
 exception CompilerError of string with 
   override x.ToString() = sprintf "Failed to compile %A" x.Data0
 
-type RegAlloctionType = StackOnly | RegGreedy
+type RegAlloctionType = StackOnly | RegGreedy | AffineGreedy
 
 type Settings = {
   allocation : RegAlloctionType
@@ -23,6 +23,13 @@ let (|SplitAt|) i = function
   | xs when List.length xs < i -> (xs,[])
   | xs -> (List.take i xs, List.skip i xs)
 
+let (|MemberF|_|) f l = 
+  match List.tryFindIndex f l with
+  | Some i -> (List.take i l, l.[i], List.skip (i+1) l) |> Some
+  | None -> None
+
+let (|Member|_|) v l = (|MemberF|_|) ((=) v) l
+
 let suffixes l = 
   let accum (rtn, suffix) x = 
       match suffix with 
@@ -35,6 +42,9 @@ let separate f l =
 
 let cons x xs = x :: xs
 
+let fst_set f (a,b) = (f a, b)
+
+let snd_set f (a,b) = (a, f b)
 let (|Present|_|) v m = 
   match Map.tryFind v m with
   | Some s -> Present s |> Some

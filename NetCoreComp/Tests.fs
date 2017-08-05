@@ -51,6 +51,7 @@ let checkvalForSettings (f: _ -> 'a) (i:'a) s settings =
 let settingsOpts = [
   {allocation = RegGreedy}
   {allocation = StackOnly}
+  {allocation = AffineGreedy}
 ]
 
 let checkval (f:_ -> 'a) (i:'a) s = 
@@ -223,10 +224,16 @@ let ``call with 6 args`` () = checkCode 21 @"
     }"
 [<Test>]
 let ``calling convention 8`` () = checkStdOut "Args 1 2 3 4 5 6 7 8\n" @" 
+
+    public int foo(string s, int a, int b, int c, int d, int e, int f, int g, int h){
+      printf(s,a,b,c,d,e,f,g,h);
+      return 0;
+    }
+
     public int main(){
       string s = ""Args %i %i %i %i %i %i %i %i"";
-      printf(s,1,2,3,4,5,6,7,8);
-      return 8;
+      foo(s,1,2,3,4,5,6,7,8);
+      return 0;
     }"
 
 [<Test>]
