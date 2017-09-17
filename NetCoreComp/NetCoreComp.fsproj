@@ -6,6 +6,7 @@
     <PackageTargetFallback>
      $(PackageTargetFallback);portable-net45+win81
    </PackageTargetFallback>
+   <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
     <compile Include="FSharpx.fs"/>
@@ -13,6 +14,7 @@
     <compile Include="Parser.fs"/>
     <compile Include="ASTBuilder.fs"/>
     <Compile Include="Flatten.fs"/>
+    <Compile Include="MixedLang.fs"/>
     <Compile Include="ComputationGraph.fs"/>
     <Compile Include="Unification.fs"/>
     <Compile Include="AssignHomes.fs"/>

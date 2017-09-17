@@ -22,11 +22,27 @@ let toList = function
 
 let fold acc seed l = List.fold acc seed (toList l)
 
-type CompNode = {
-  instruction : Instruct
-  id : int
-  next : Next<int>
+
+type NodeId = Node of int
+
+type CompNode<'v> = {
+  instruction : Instruct<'v>
+  id : NodeId
+  next : Next<NodeId>
 }
+
+type Graph<'a, 't> = {
+  nodes : Map<NodeId,'a>
+  adj : Map<NodeId, 't>
+} 
+
+type Neighbors = {ins : NodeId list; outs : NodeId list}
+
+type DiGraph<'a> = Graph<'a,Neighbors>
+
+type CompGraph<'v> = DiGraph<CompNode<'v>>
+
+type StdGraph<'a, 't> when 't :> seq<'a> = Graph<'a,'t>
 
 ///What kind of Next does each instruction use?
 let private (|Return|StepNext|StepJump|BranchJump|) = function
@@ -50,7 +66,9 @@ let private computeEdges prgm f x xs =
 ///Given a list of instructions, produces an adjacency map
 ///of the corresponding computation graph
 let private buildComputationGraph l = 
-  let prgmWithIds = List.indexed l
+  let prgmWithIds = l 
+                 |> List.indexed
+                 |> List.map (fst_set Node)
   let computeNodes (((id,instruct),_) as x) = 
       let node = {
         id = id
@@ -67,7 +85,7 @@ let private getVariable = function
   | DataRefAtom i -> None
   | VarAtom v -> Some v
 
-let private getVariable' = getVariable >> Option.toList
+let private getVariable' x = x |> getVariable |> Option.toList
 
 let getReadVariables = function 
   | ReturnI x | AssignI (_,x) -> x |> getVariable'
@@ -80,7 +98,7 @@ let getWrittenVariables = function
   | AssignI (x,_) | CallI (Some x,_,_) -> [x]
   | _ -> []
 
-type Neighbors<'a> = {ins : 'a list; outs : 'a list}
+ 
 let private setIns f s = {s with ins = f s.ins}
 let private setOuts f s  = {s with outs = f s.outs}
 
@@ -90,16 +108,19 @@ let private addEdge start finish =
   >> setIfAbsent finish {ins = [] ;outs =[]}
   >> update finish (setIns (cons start))
 
-let private computeAdjacency  = 
+let private computeAdjacency x = 
   let folder adjacencies i node = 
     match node.next with
     | Exit -> setIfAbsent i {ins = []; outs = []} adjacencies
     | Step t -> addEdge i t adjacencies
     | Branch (t1,t2) -> adjacencies |> addEdge i t1 |> addEdge i t2
-  Map.fold folder Map.empty
+  Map.fold folder Map.empty x
 
 let toGraph l = 
   let g = buildComputationGraph l
   let adj = computeAdjacency g
-  (g,adj)
+  {
+    nodes = g
+    adj = adj
+  }
  

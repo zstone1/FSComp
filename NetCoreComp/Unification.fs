@@ -5,103 +5,158 @@ open FSharpx.State
 open FSharpx
 open Aether
 open ComputationGraph
+open MixedLang
 ///Given a node where variable v is read,
 ///This returns all nodes where v is live
 ///up to readNode.
-let rec private trackParents' v (adj:Map<_,_>) (g:Map<_,_>) n = state {
+
+type StackLoc = 
+  | PreStack of int
+  | VarStack of int
+  | PostStack of int
+
+type Location<'t> = 
+  | Reg of Register
+  | Data of string
+  | Imm of int
+  | Stack of StackLoc * 't
+
+///Traverses up the computation graph, starting at @n, to determine all of the nodes where @v is alive (assuming it is alive at @n) 
+let rec private trackParents' (v : MixedVar) (compGraph : DiGraph<_>) n = state {
   let! s = getState
-  match List.contains n s with
-  | true -> return ()
+  let completedLoop = List.contains n s
+  match completedLoop with
+  | true -> return () 
   | false -> 
       do! (n :: s) |> putState 
-      let writtenVars = g.[n].instruction |> getWrittenVariables
-      match List.contains v writtenVars with
-      | true -> return ()
+      let writtenVars = compGraph.nodes.[n].instruction |> getWrittenVariables
+      let deadAbove = List.contains v writtenVars 
+      match deadAbove with
+      | true -> return () 
       | false ->
-         let parents = adj.[n].ins
+         let parents = compGraph.adj.[n].ins
          //non-tail recursive... probably bad.
-         do! mapU (trackParents' v adj g) parents
+         do! mapU (trackParents' v compGraph) parents 
 }        
 
-let private trackParents v adj g n = exec (trackParents' v adj g n) []
+let private trackParents v compGraph n = exec (trackParents' v compGraph n) []
 
-let private getLiveNodes graph adj = query {
-  for (k,c) in Map.toSeq graph do
+///Returns a pair of Variable->int for every node where 
+///the variable is live.
+let private getLiveNodes compGraph = query {
+  for (k,c) in Map.toSeq compGraph.nodes do
   for var in getReadVariables c.instruction do
-  for l in  trackParents var adj graph k do
+  for l in  trackParents var compGraph k do
   select (var, l)
 }
 
+///Given the list of variable -> live node pairs,
+///builds joins against itself to produce the 
+///adjacency map of the liveness graph.
 let private toLivnessGraph (s:seq<_>) = query {
   for (v1, n1) in s do
   join (v2, n2) in s on (n1 = n2)
   select (v1, v2) 
   distinct into x
-//  where (fst x <> snd x)
   groupBy (fst x) into g 
   select (g.Key, Seq.map snd g)
 }
 
-let private assignColor color node = updateStateU <| addOrUpdate node color (konst color)
-
-let private greedyColorGraph nextColor (g:Map<_,_>) =
- let evaled = (Map.map (konst List.ofSeq) g)
- state {
-  for x in g do 
-    let! s = getState
-    let n = Seq.choose (Map.tryFind |> flip <| s)  x.Value
-    let c = nextColor n
-    do! assignColor c x.Key
+let private assignColor (color) (node : MixedVar) = state {
+   do! updateStateU <| addOrUpdate node color (konst color)
+   return color
 }
 
-let private pickNext cs = Seq.fold max 0 cs |> (+) 1
+let private validateColoring (adjNodes) thisColor = state {
+  let! coloringSoFar = getState
+  let colors = adjNodes |> List.map (Map.find|>flip<| coloringSoFar)
+  if colors |> List.contains thisColor 
+  then failComp "Graph coloring failed due to bad fixed colors"
+  else return ()
+}
+
+///Retains color for those variables that are in fixed positions
+///Otherwise use @pickAndAssignColor
+let private colorGraph pickAndAssignColor (g: Map<_,_>) = state {
+  for x in g do
+    let! newColor = 
+      match x.Key with
+      | (RegVar r)  -> x.Key |> assignColor (Reg r)
+      | (IncomingArg i)  -> x.Key |> assignColor (Stack (PreStack i, ()))
+      | (StackArg i) ->  x.Key |> assignColor (Stack (VarStack i, ()))
+      | _ -> pickAndAssignColor x
+    //This makes assumptions about the ml being valid,
+    //in the sense of two fixed variables won't be in the same 
+    //place at the same time. This will fail fast if it's not valid.
+    //It can always be patched by adding more temp variables.
+    do! validateColoring g.[x.Key] newColor
+}
+
+let colors = Seq.append 
+               (List.map Reg [RDI;RSI;RDX;RCX;R8;R9;R15; R14; R13; R12; RBP; RBX; RAX])
+               (Seq.initInfinite (fun i -> Stack (VarStack i ,())) )
+
+let greedyNextColor cs = Seq.find (fun c -> not <| Seq.contains c cs) colors
+
+let private pickAndAssignGreedy (x : System.Collections.Generic.KeyValuePair<_,_>) = state {
+  let! coloringSoFar = getState
+  let n = Seq.choose (Map.tryFind |> flip <| coloringSoFar)  x.Value
+  let c = greedyNextColor n
+  return! assignColor c x.Key
+}
   
-let private colorGraph a = greedyColorGraph pickNext a
+let private colorGraphGreedy a = colorGraph pickAndAssignGreedy a
 
 let private addFunctionArgNode args g = 
-  let nodeId = -1
-  let addArg {ASTVariable.name = n} = (VarName n, nodeId)
+  let nodeId = -1 |> Node
+  let addArg x = (x, nodeId)
   let argNodes = args |> Seq.map addArg 
   argNodes |> Seq.append g
 
-let private colorIL args = 
+let private colorML args = 
      toGraph
-  >> (getLiveNodes |> uncurry)
+  >> getLiveNodes
   >> addFunctionArgNode args
   >> toLivnessGraph
   >> Map.ofSeq
-  >> colorGraph
+  >> Map.map (konst List.ofSeq)
+  >> colorGraphGreedy
   >> (exec |> flip <| Map.empty)
 
-let private unifiedName i = sprintf "_unified_%i" i
-let private replaceVar (coloring:Map<_,_>) v = 
-  coloring.[v] |> unifiedName |> VarName
-let private replaceVarOption (coloring:Map<_,_>) v = 
-  Map.tryFind v coloring |> Option.map (unifiedName >> VarName)
+let private replaceVar (coloring:Map<_,_>) v = coloring.[v] 
+
 let private replaceAtom coloring = function 
   | VarAtom v -> replaceVar coloring v |> VarAtom
-  | x -> x
-
-let private replaceAstVar (coloring :Map<_,_>) (v:ASTVariable) = 
-  let newName = Map.tryFind (VarName v.name) coloring 
-             |> Option.map unifiedName
-             |> Option.defaultValue v.name
-  {v with name = newName}
+  | IntLitAtom i -> IntLitAtom i
+  | DataRefAtom s -> DataRefAtom s
 
 let private unifyVars c = 
   mapInstruct 
     (replaceVar c) 
-    (replaceVarOption c |> Option.bind)
+    (replaceVar c |> Option.map)
     (replaceAtom c) 
     id
 
-let private unifyVariables (signature, il) = 
-  let coloring = colorIL signature.args il
-  let newIl = il |> List.map (unifyVars coloring)
-  let newSig = {signature with args = List.map (replaceAstVar coloring) signature.args}
+type UnifiedSignature = CompSignature<Location<unit>>
+
+let private unifyVariables (signature : MixedSignature ,ml) = 
+  let coloring = colorML signature.args ml
+  let newIl = ml |> List.map (unifyVars coloring)
+  let newSig = 
+    {
+      UnifiedSignature.args = List.map (replaceVar coloring) signature.args
+      name = signature.name
+      returnTy = signature.returnTy
+    }
+
   (newSig, newIl)
 
-let unifyModule (m : FlattenedModule) = 
-  {m with funcs = List.map unifyVariables m.funcs}
+
+type UnifiedModule = CompModule<Location<unit>>
+let unifyModule (m : MLModule) = 
+  {
+    UnifiedModule.lits = m.lits
+    UnifiedModule.funcs = List.map unifyVariables m.funcs
+  }
 
  

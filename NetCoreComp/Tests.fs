@@ -8,6 +8,7 @@ open ASTBuilder
 open Unification
 open Swensen.Unquote
 open InjectMoves
+open MixedLang
 
 let testOutputDir = "/home/zach/cmp/TestOutput/"
 let runProc dir f args = 
@@ -27,6 +28,7 @@ let executeInDir testDir prgm=
        |> parseProgram 
        |> convertModule
       ||> flattenModule
+       |> toML
        |> unifyModule
        |> assignMovesToModules
        |> serializeModule
@@ -69,6 +71,7 @@ let simplest () = checkCode 5 @"
          return y;
      }"
 
+(*
 [<Test>]
 let ``simple adding`` () = checkCode 4 @"
      public int main(){
@@ -333,3 +336,4 @@ let ``swapparams`` () = checkCode 4 @"
       return i - j;
     }
     "
+*)

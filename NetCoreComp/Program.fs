@@ -7,6 +7,7 @@ open Flatten
 open Assembly
 open Unification
 open InjectMoves
+open MixedLang
 
 
 [<EntryPoint>]
@@ -15,21 +16,22 @@ let main argv =
     let prgm = @"
     public int main(){
       int x = 1;
-      return x + foo(1,1,2,3,5,8);
+      return foo(x);
     }
     
-    public int foo(int a, int b, int c, int d, int e, int f){
-      return a + b + c + d + e + f;
+    public int foo(int a){
+      return a;
     }"
     globalSettings <- {allocation = AffineGreedy}
     let p = prgm 
          |> parseProgram 
          |> convertModule
         ||> flattenModule
+         |> toML
          |> unifyModule
          //|> (fun i -> printfn "%A" i; i)
-         |> unifyModule
-         |> (fun i -> printfn "%A" i; i)
+         //|> unifyModule
+         //|> (fun i -> printfn "%A" i; i)
          |> assignMovesToModules
          |> serializeModule
 //         |> (fun i -> i.funcInstructions.Head |> snd)

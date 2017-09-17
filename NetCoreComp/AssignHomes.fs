@@ -5,6 +5,7 @@ open FSharpx
 open Flatten
 open ComputationGraph
 open FSharpx.State
+open MixedLang
 (*
   The stack is broken up into three parts
   The PreStack, VarStack, and PostStack. 
@@ -38,24 +39,8 @@ and the PreStack and VarStack is fixed. The PostStack
 persists only for one function call
 
 *)
-type Register = 
-  | RAX
-  | RCX
-  | RDX
-  | RBX
-  | RSP
-  | RBP
-  | RSI
-  | RDI
-  | R8
-  | R9
-  | R10
-  | R11
-  | R12
-  | R13
-  | R14
-  | R15
 
+(*
 type StackLoc = 
   | PreStack of int
   | VarStack of int
@@ -74,7 +59,10 @@ let callingRegs = [RDI;RSI;RDX;RCX;R8;R9]
 //reserving these for swaping, temp storage, ect. 
 //Also the calling regs are missing to avoid conflicts
 //while handling parameters
-let homeRegisters = callingRegs @ [R15; R14; R13; R12; RBP; RBX; RAX; ]
+
+let homeRegisters = List.append callingRegs [R15; R14; R13; R12; RBP; RBX; RAX; ]
+
+
 let callingRequirements toRev stackPos (SplitAt 6 (l,r)) = 
   let regArgs = Seq.zip callingRegs l |> Seq.toList
   let stackArgs = r
@@ -93,7 +81,7 @@ let getInstrAffinity = function
   | ReturnI v -> [Reg RAX, v] 
   | _ -> []
 
-let private getAfinity (compNode:CompNode) = (getInstrAffinity compNode.instruction) 
+let private getAfinity (compNode:CompNode<_>) = (getInstrAffinity compNode.instruction) 
 
 let private allAffinities il = 
   il 
@@ -106,8 +94,8 @@ let allVariables sgn il =
   let inprgm = il 
             |> (toGraph >> fst)
             |> Map.fold (fun s _ v -> List.append (getAllVariables v) s) List.empty
-  let args = List.map toVar sgn.args
-  inprgm @ args
+//  let args = List.map toVar sgn.args
+  inprgm @ sgn.args
   
 let assignHomesStackOnly sgn il = 
   let allVars = il |> allVariables sgn |> List.distinct 
@@ -144,3 +132,4 @@ let assignHomes sgn il =
   | StackOnly -> assignHomesStackOnly sgn il
   | RegGreedy -> assignHomesRegGreedy sgn il
   | AffineGreedy -> assignHomesAffinity sgn il
+  *)

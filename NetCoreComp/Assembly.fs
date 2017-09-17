@@ -7,6 +7,7 @@ open InjectMoves
 open AssignHomes
 open ASTBuilder
 open FSharpx.State
+open MixedLang
  
 let getVarStackDepth homes =
   Seq.sumBy (snd >> function
@@ -24,7 +25,7 @@ let getAlignmentAdjust homes =
            + getSavedVariableDepth homes
   size % 2
 
-let rec serializeLocation (homes: Homes) = 
+let rec serializeLocation (homes: Homes<_>) = 
   let homeDepth = getVarStackDepth homes + getSavedVariableDepth homes + getAlignmentAdjust homes
   function 
   | Reg x -> (sprintf "%A" x).ToLowerInvariant()
@@ -72,14 +73,15 @@ let introOutroAdj homes = getVarStackDepth homes + getAlignmentAdjust homes
 let intro sgn homes = 
   LabelA (sgn |> getCallLab)
   :: saveCalleeRegs homes
-  @ [ SubA (Reg RSP, Imm ( 8 * introOutroAdj homes))]
+  (*@ [ SubA (Reg RSP, Imm ( 8 * introOutroAdj homes))]*)
 let outro sgn homes =
   [
     LabelA (sgn |> getEndLab); 
     AddA (Reg RSP, Imm (8 * introOutroAdj homes));
   ]
+  (*
   @ restoreCalleeRegs homes
-  @[ RetA]
+  @ [RetA] *)
 
 let funcToInstructions (sgn, homes, instrs) = 
   intro sgn homes @ instrs@ outro sgn homes

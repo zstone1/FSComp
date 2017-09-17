@@ -7,8 +7,8 @@ open ComputationGraph
 open AssignHomes
 open FSharpx.State
 open Option
-
-type Homes = Map<Variable, Location<unit>>
+open MixedLang
+open Unification
 
 type Offset = 
   | FromHome of int
@@ -72,7 +72,7 @@ let getSaveRegs homes regs =
   |> Set.intersect (regs |> Set.ofList)
   |> Set.toList
 
-let toLoc (homes:Homes) = function 
+let toLoc (homes:Homes<_>) = function 
   | VarAtom v -> homes.[v]
   | DataRefAtom v -> Data v
   | IntLitAtom i -> Imm i
@@ -85,7 +85,7 @@ let withOffset o = function
   | Data d -> Data d
   | Stack (s,_) -> Stack(s,o)
 
-let initialMoves args (homes: Homes) = 
+let initialMoves args (homes: Homes<_>) = 
   let regArgs, stackArgs = incomingArgReqs args
   let desiredRegLocs = regArgs |> List.map ((fun (_,v) -> ((homes.[v] |> withOffset (FromHome 0))), v) )
   let currentLocs = (regArgs |> List.map (fun (r,v) -> (Reg r, v))) @ (stackArgs |> List.map (fun (s,v) -> (Stack(s,(FromHome 0)),v)))
@@ -97,7 +97,7 @@ let initialMoves args (homes: Homes) =
 let private callerSave = [RAX; RDI; RSI; RDX; RCX; R8; R9; R10; R11;] 
 
 let toLocNoOffset homes = toLoc homes >> withOffset (FromHome 0)
-let private movToReg (homes: Homes) arith var atom = 
+let private movToReg (homes: Homes<_>) arith var atom = 
   let varHome = homes.[var]
   match varHome with
   | Reg r -> [],[], arith (Reg r, atom |> toLocNoOffset homes )
@@ -106,7 +106,7 @@ let private movToReg (homes: Homes) arith var atom =
          let work =  arith (Reg R11, atom |> toLocNoOffset homes)
          before, after, work
 
-let getMoves endLab (homes: Homes) = function
+let getMoves endLab (homes: Homes<_>) = function
   | AddI (var,at) -> movToReg homes AddA var at
   | SubI (var,at)  -> movToReg homes SubA var at
   | IMulI (var,at)  -> movToReg homes IMulA var at
@@ -149,7 +149,7 @@ let getMoves endLab (homes: Homes) = function
 
        setupCall, afterCall, CallA lab
 
-let toAssignNode endLab homes (c:CompNode) =
+let toAssignNode endLab homes (c:CompNode<_>) =
   let before, after, assem = getMoves endLab homes c.instruction
   {
     id = c.id
@@ -159,7 +159,7 @@ let toAssignNode endLab homes (c:CompNode) =
     afterMoves = after
   }
 
-let getEndLab (x:ASTSignature) = sprintf "%s_rtn" x.name |> LabelName
+let getEndLab (x:MixedSignature) = sprintf "%s_rtn" x.name |> LabelName
 let computeMoves sgn il = 
   let homes = assignHomes sgn il
   let endLab = sgn |> getEndLab
@@ -168,7 +168,7 @@ let computeMoves sgn il =
   |> fst 
   |> Map.map (toAssignNode endLab homes |> konst) ,homes
 
-let getCallLab (x:ASTSignature) = sprintf "%s" x.name |> LabelName
+let getCallLab (x:MixedSignature) = sprintf "%s" x.name |> LabelName
 
 let toAssembly = function 
   | StackAdj i when i > 0 -> [AddA (Reg RSP, Imm (8 * i))]
@@ -200,13 +200,13 @@ let getAssemblyForNode (n:AssignNode) =
   @ (n.afterMoves |> List.collect toAssembly)
   
 
-type AsmModule = {funcs : (ASTSignature *  Homes * Assembly list) list; 
+type AsmModule = {funcs : (MixedSignature *  Homes<MixedVar> * Assembly list) list; 
                   lits : (string * string) list}
 
 let assignMovesFunc sgn il = 
   let nodes, homes = computeMoves sgn il 
   let init = homes 
-          |> initialMoves (List.map toVar sgn.args)
+          |> initialMoves sgn.args
           |> Seq.collect toAssembly
           |> Seq.toList
   let body = nodes
@@ -214,7 +214,7 @@ let assignMovesFunc sgn il =
           |> List.collect getAssemblyForNode
   sgn, homes, init @ body
       
-let assignMovesToModules (x:FlattenedModule) = {
+let assignMovesToModules (x:MLModule) = {
   funcs = List.map (uncurry assignMovesFunc) x.funcs
   lits = x.lits
 }
