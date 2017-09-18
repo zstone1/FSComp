@@ -20,6 +20,8 @@ type Instruct<'v> =
   | JmpI of LabelMarker
   | CallI of 'v option * LabelMarker * Atom<'v> list
   | ReturnI of Atom<'v>
+  | PrepareCall of int (*stackArgs*)
+  | CompleteCall of int (*stackArgs*)
   | LabelI of LabelMarker
   | AddI of 'v * Atom<'v>
   | SubI of 'v * Atom<'v>
@@ -41,6 +43,8 @@ let mapInstruct f f' g h = function
   | CallI (v,l,args) -> CallI (f' v, h l, List.map g args)
   | LabelI (l) -> LabelI (h l)
   | ReturnI (v) -> ReturnI (g v)
+  | PrepareCall i -> PrepareCall i
+  | CompleteCall  i -> CompleteCall i
 
 type InterSt = {
   uniqueNum : int

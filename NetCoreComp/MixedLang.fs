@@ -77,7 +77,8 @@ let toMixedInstruct = function
       let moves = regArgs @ stackArgs
                |> List.map ( snd_set toMLAtom >> AssignI)
 
-      List.append moves  [CallI (rtnVar, lab, allArgs)]
+      [PrepareCall stackArgs.Length] @ moves @  [CallI (rtnVar, lab, allArgs)] @ [CompleteCall stackArgs.Length]
+    | PrepareCall _ | CompleteCall _ -> failComp "IL should not have any prepare or complete calls"
 
 let toMixedSig (sgn : ILSignature) = {
   MixedSignature.name = sgn.name

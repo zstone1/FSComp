@@ -83,7 +83,7 @@ let private colorGraph pickAndAssignColor (g: Map<_,_>) = state {
       match x.Key with
       | (RegVar r)  -> x.Key |> assignColor (Reg r)
       | (IncomingArg i)  -> x.Key |> assignColor (Stack (PreStack i, ()))
-      | (StackArg i) ->  x.Key |> assignColor (Stack (VarStack i, ()))
+      | (StackArg i) ->  x.Key |> assignColor (Stack (PostStack i, ()))
       | _ -> pickAndAssignColor x
     //This makes assumptions about the ml being valid,
     //in the sense of two fixed variables won't be in the same 

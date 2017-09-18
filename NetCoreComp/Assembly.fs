@@ -8,6 +8,7 @@ open AssignHomes
 open ASTBuilder
 open FSharpx.State
 open MixedLang
+open Unification
  
 let getVarStackDepth homes =
   Seq.sumBy (snd >> function

@@ -16,7 +16,6 @@ type Offset =
 type Move = 
   | StackAdj of int 
   | MovLoc of Location<Offset> * Location<Offset>
-  | Xchg of Location<Offset> * Location<Offset>
   | PushM of Register 
   | PopM of Register
 
@@ -32,50 +31,17 @@ type Assembly =
   | CallA of LabelMarker
   | PushA of Register
   | PopA of Register
-  | XchgA of Location<Offset> * Location<Offset>
   | RetA
   | SyscallA
   | Nop
 
-type AssignNode = {
-  id : int
-  instruction : Assembly
-  next : Next<int>
-  beforeMoves : Move list
-  afterMoves : Move list
-}
-
-///If someone's initial position is 
-///someone else's final position, move them first.
-let reorder current desired = 
-  let conflicted ((l, v), (l',v')) = ( Some l = (List.tryFind (snd >> (=) v') current |> map fst))
-  let conflicts, noconf = List.allPairs desired desired |> separate conflicted 
-  (List.map snd conflicts @ List.map snd noconf) |> List.distinct
-
-let rec moveManyIntoRegs' f current desired = 
-  let replace evictedVar newR (l,v) = if v = evictedVar then (newR, evictedVar) else (l,v)
-  match desired with
-  | [] -> []
-  | (r, v) :: rest
-    -> let currentLoc = current |> List.tryFind (snd >> (=) v) |> map fst |> defaultWith (fun () -> f v) 
-       match current |> List.tryFind (fst >> (=) r) with
-       | None -> MovLoc (r, currentLoc) :: moveManyIntoRegs' f current rest
-       | Some (k,x) -> Xchg (r, currentLoc) :: moveManyIntoRegs' f (List.map (replace x r) current) rest
-
-let moveManyIntoRegs f current desired = moveManyIntoRegs' f current (reorder current desired)
-
-let getSaveRegs homes regs = 
-  homes 
-  |> mapValues
+let getSaveRegs used regs = 
+  used 
   |> List.choose (function Reg x -> Some x | _ -> None)
   |> Set.ofList
   |> Set.intersect (regs |> Set.ofList)
   |> Set.toList
 
-let toLoc (homes:Homes<_>) = function 
-  | VarAtom v -> homes.[v]
-  | DataRefAtom v -> Data v
-  | IntLitAtom i -> Imm i
 
 let calleeSave = [RBP; RBX; R12; R13; R14; R15]
 
@@ -85,90 +51,59 @@ let withOffset o = function
   | Data d -> Data d
   | Stack (s,_) -> Stack(s,o)
 
-let initialMoves args (homes: Homes<_>) = 
-  let regArgs, stackArgs = incomingArgReqs args
-  let desiredRegLocs = regArgs |> List.map ((fun (_,v) -> ((homes.[v] |> withOffset (FromHome 0))), v) )
-  let currentLocs = (regArgs |> List.map (fun (r,v) -> (Reg r, v))) @ (stackArgs |> List.map (fun (s,v) -> (Stack(s,(FromHome 0)),v)))
-  let regMoves = desiredRegLocs |> moveManyIntoRegs (fun i -> failComp "only variables are args") currentLocs
-  let stackMoves = stackArgs |> List.map (fun (l,v) -> MovLoc (homes.[v] |> withOffset (FromHome 0), Stack (l, FromHome 0)))
-  regMoves @ stackMoves
-  
 
 let private callerSave = [RAX; RDI; RSI; RDX; RCX; R8; R9; R10; R11;] 
 
-let toLocNoOffset homes = toLoc homes >> withOffset (FromHome 0)
-let private movToReg (homes: Homes<_>) arith var atom = 
-  let varHome = homes.[var]
-  match varHome with
-  | Reg r -> [],[], arith (Reg r, atom |> toLocNoOffset homes )
+let toLocNoOffset x = withOffset (FromHome 0) x
+
+let fromAtomNoOffset = function 
+  | VarAtom v -> toLocNoOffset v
+  | DataRefAtom s -> Data s
+  | IntLitAtom i -> Imm i
+
+let private movToReg arith var atom = 
+  match var with
+  | Reg r -> [], [arith (Reg r, atom |> toLocNoOffset )], []
   | x -> let before = [MovLoc(Reg R11, x |> withOffset (FromHome 0))]
          let after = [MovLoc(x |> withOffset (FromHome 0), Reg R11)]
-         let work =  arith (Reg R11, atom |> toLocNoOffset homes)
-         before, after, work
+         let work =  [arith (Reg R11, atom |> toLocNoOffset )]
+         before, work, after
 
-let getMoves endLab (homes: Homes<_>) = function
-  | AddI (var,at) -> movToReg homes AddA var at
-  | SubI (var,at)  -> movToReg homes SubA var at
-  | IMulI (var,at)  -> movToReg homes IMulA var at
-  | CmpI (var, at ) -> movToReg homes CmpA var at 
-  | JmpI l -> [],[],JmpA l
-  | JnzI l -> [],[],JnzA l
-  | LabelI l -> [],[],LabelA l
-  | AssignI (var, at) -> [],[MovLoc(VarAtom var |> toLocNoOffset homes, at |> toLocNoOffset homes)],Nop 
-  | ReturnI v -> [MovLoc (Reg RAX, v |> toLocNoOffset homes)],[], JmpA endLab
-  | CallI (rtn, lab, args) 
-    //This assumes that the normal rsp offset is even
-    -> 
-       let regArgs, stackArgs = args |> callingRequirements true PostStack 
-       let regsToSave = getSaveRegs homes callerSave
+let getMoves usedLocs endLab = function
+  | AddI (var,at) -> movToReg AddA var (at |> fromAtomNoOffset)
+  | SubI (var,at)  -> movToReg SubA var (at |> fromAtomNoOffset)
+  | IMulI (var,at)  -> movToReg IMulA var (at |> fromAtomNoOffset)
+  | CmpI (var, at ) -> movToReg CmpA var (at |> fromAtomNoOffset)
+  | JmpI l -> [], [JmpA l], []
+  | JnzI l -> [], [JnzA l], []
+  | LabelI l -> [], [LabelA l], []
+  | AssignI (var, at) -> [], [], [MovLoc(var |> toLocNoOffset, at |> fromAtomNoOffset)] 
+  | ReturnI v -> [], [JmpA endLab], []
 
-       let stackChange = stackArgs.Length + regsToSave.Length
-       let alignment = if stackChange % 2 = 0 then 1 else 0  //Calling convention requires stack alligned to 8%16 when called
-       let offsetMod i =  withOffset (FromHome (regsToSave.Length +  alignment + i))
+  //Ok, this is where it gets weird. We assume the ML puts rtn in RAX correctly
+  //we also know that the args are handled by previous assignments, and the PrepareCall/CompleteCall wrappers
+  | CallI (rtn, lab, args) -> [], [CallA lab], []
+  | PrepareCall i 
+    -> let requireSaving = callerSave |> getSaveRegs usedLocs 
+       let offset = if requireSaving.Length + i % 2 = 0 then [StackAdj -8] else []
+       let saves = requireSaving |> List.map PushA
+       offset, saves, []
+  | CompleteCall i 
+    -> let requireSaving = callerSave |> getSaveRegs usedLocs 
+       let offset = if requireSaving.Length + i % 2 = 0 then [StackAdj -8] else []
+       let saves = requireSaving |> List.map PopA |> List.rev
+       [StackAdj (8*i)], saves, [StackAdj 8]
 
-       //regs are moved after the stack is set, so the offsetMod is the full stackArgs.
-       let regArgLocations = homes |> Map.map (konst <| offsetMod stackArgs.Length) |> Map.toList 
-       let regArgMoves = regArgs 
-                      |> List.map (fst_set Reg)
-                      |> moveManyIntoRegs 
-                           (toLoc homes >> offsetMod stackArgs.Length) 
-                           (regArgLocations |> List.map (swap >> snd_set VarAtom ))
+let toAssignNode endLab usedLocs (c:CompNode<_>) = getMoves usedLocs endLab c.instruction
 
-       let toMovWithMod i (x, y) = MovLoc (Stack (x, ()) |> offsetMod i, y |> toLoc homes |> offsetMod i)
-       let stackArgMoves = stackArgs |> List.mapi toMovWithMod
+let getEndLab (x:UnifiedSignature) = sprintf "%s_rtn" x.name |> LabelName
 
-       let saveRegs = regsToSave |> List.map PushM 
-       let restoreRegs = regsToSave |> List.rev |> List.map PopM
-
-       let saveRtnToTemp = rtn |> Option.map (fun v -> MovLoc (Reg R11, Reg RAX)) |> Option.toList
-       let saveRtnToHome = rtn |> Option.map (fun v -> MovLoc (homes.[v] |> withOffset (FromHome 0), Reg R11)) |> Option.toList
-       let adjustStack = (StackAdj (alignment + stackArgs.Length))
-
-       let setupCall = saveRegs @ [StackAdj -alignment] @ stackArgMoves @ regArgMoves
-       let afterCall = saveRtnToTemp @ [adjustStack] @ restoreRegs @ saveRtnToHome
-
-       setupCall, afterCall, CallA lab
-
-let toAssignNode endLab homes (c:CompNode<_>) =
-  let before, after, assem = getMoves endLab homes c.instruction
-  {
-    id = c.id
-    instruction = assem
-    next = c.next
-    beforeMoves = before
-    afterMoves = after
-  }
-
-let getEndLab (x:MixedSignature) = sprintf "%s_rtn" x.name |> LabelName
-let computeMoves sgn il = 
-  let homes = assignHomes sgn il
+let computeMoves sgn ml = 
+  let usedLocs = ml |> List.collect getReadVariables
   let endLab = sgn |> getEndLab
-  il 
-  |> toGraph 
-  |> fst 
-  |> Map.map (toAssignNode endLab homes |> konst) ,homes
+  ml |> List.map (getMoves usedLocs endLab )
 
-let getCallLab (x:MixedSignature) = sprintf "%s" x.name |> LabelName
+let getCallLab (x:UnifiedSignature) = sprintf "%s" x.name |> LabelName
 
 let toAssembly = function 
   | StackAdj i when i > 0 -> [AddA (Reg RSP, Imm (8 * i))]
@@ -187,38 +122,17 @@ let toAssembly = function
   | MovLoc (l1,l2) -> [MovA (l1,l2)]
   | PushM r -> [PushA r]
   | PopM r -> [PopA r]
-  | Xchg (Reg r, Imm i) | Xchg (Imm i, Reg r) -> [MovA (Reg r, Imm i)]
-  | Xchg (Reg r, Data d) | Xchg (Data d, Reg r) -> [MovA (Reg r, Data d)]
-  | Xchg (Reg r, l) -> [XchgA (Reg r, l)]
-  | Xchg (l, Reg r) -> [XchgA (l, Reg r)]
-  | Xchg (a,b) -> failComp "exchanging bad things %A, %A" a b;
 
 
-let getAssemblyForNode (n:AssignNode) = 
-  (n.beforeMoves |> List.collect toAssembly )
-  @ [n.instruction] 
-  @ (n.afterMoves |> List.collect toAssembly)
+let getAssemblyForNode (before, work, after) = 
+  (before |> List.collect toAssembly )
+  @ work
+  @ (after |> List.collect toAssembly)
   
 
-type AsmModule = {funcs : (MixedSignature *  Homes<MixedVar> * Assembly list) list; 
+type AsmModule = {funcs : (Assembly list) list; 
                   lits : (string * string) list}
 
-let assignMovesFunc sgn il = 
-  let nodes, homes = computeMoves sgn il 
-  let init = homes 
-          |> initialMoves sgn.args
-          |> Seq.collect toAssembly
-          |> Seq.toList
-  let body = nodes
-          |> mapValues 
-          |> List.collect getAssemblyForNode
-  sgn, homes, init @ body
-      
-let assignMovesToModules (x:MLModule) = {
-  funcs = List.map (uncurry assignMovesFunc) x.funcs
-  lits = x.lits
-}
-  
 let saveCalleeRegs homes = getSaveRegs homes calleeSave 
                         |> List.map PushM 
                         |> List.collect toAssembly
@@ -227,3 +141,17 @@ let restoreCalleeRegs homes = getSaveRegs homes calleeSave
                            |> List.rev 
                            |> List.map PopM 
                            |> List.collect toAssembly
+
+let assignMovesFunc (sgn, ml) = 
+  let savedVariables = (ml |> List.collect getReadVariables)
+  let body = computeMoves sgn ml |> List.collect getAssemblyForNode
+  let init = LabelA (getCallLab sgn) :: saveCalleeRegs savedVariables
+  let finish = LabelA (getEndLab sgn) :: restoreCalleeRegs savedVariables
+  init @ body @ finish
+      
+let assignMovesToModules (x:UnifiedModule) = 
+  {
+    funcs = List.map assignMovesFunc x.funcs
+    lits = x.lits
+  }
+  
