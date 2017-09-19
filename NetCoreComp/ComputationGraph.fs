@@ -51,6 +51,7 @@ let private (|Return|StepNext|StepJump|BranchJump|) = function
   | JmpI l  -> StepJump l
   | CmpI _ | AssignI _ | AddI _ | LabelI _ 
   | IMulI _ | SubI _ | CallI _ 
+  | CompleteCall _ | PrepareCall _
       -> StepNext
 
 let private computeEdges prgm f x xs = 
@@ -88,8 +89,10 @@ let private getVariable = function
 let private getVariable' x = x |> getVariable |> Option.toList
 
 let getReadVariables = function 
-  | ReturnI x | AssignI (_,x) -> x |> getVariable'
-  | JmpI _ | JnzI _ | LabelI _ -> []
+  | ReturnI x | AssignI (_,x) 
+    -> x |> getVariable'
+  | JmpI _ | JnzI _ | LabelI _ | CompleteCall _ | PrepareCall _
+    -> []
   | CallI (_,_,c) -> c |> List.collect getVariable'
   | CmpI (a,b) | AddI (a,b) | SubI (a,b)  | IMulI (a,b) | CmpI (a,b)
       -> a :: (b |> getVariable')

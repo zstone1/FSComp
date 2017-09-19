@@ -10,83 +10,60 @@ open FSharpx.State
 open MixedLang
 open Unification
  
-let getVarStackDepth homes =
-  Seq.sumBy (snd >> function
-    | Stack(VarStack i,_) -> 1
-    | _ -> 0) (homes 
-  |> Map.toSeq)
-
-let getSavedVariableDepth homes =
-  homes 
-  |> (getSaveRegs |> flip) calleeSave
-  |> List.length
-
-let getAlignmentAdjust homes = 
-  let size = getVarStackDepth homes
-           + getSavedVariableDepth homes
-  size % 2
-
-let rec serializeLocation (homes: Homes<_>) = 
-  let homeDepth = getVarStackDepth homes + getSavedVariableDepth homes + getAlignmentAdjust homes
-  function 
-  | Reg x -> (sprintf "%A" x).ToLowerInvariant()
-  | Imm (i) -> i.ToString()
+//Stack is organized like |stack args| variable homes | callee save | alignment | callerSave | stack args
+//                                    ^
+//                                 adjustment is difference to here.
+let serializeLocation adjustment = function
+  | Imm i -> i.ToString()
+  | Reg r -> (sprintf "%A" r).ToLowerInvariant()
   | Data s -> s
-  | Stack(VarStack i, o) 
-    -> (match o with | FromHome s -> homeDepth + s )
-    |> fun x -> x - (i + 1) 
-    |> (*) 8
-//    |> (+) (match o with FromHome)
-    |> sprintf "qword [rsp + %i]" //stackgrowsdown.com
-  | Stack(PreStack i,o) 
-    -> (match o with | FromHome s -> homeDepth + s )
-    |> (+) i
-    |> (+) 1 //rtn ptr
-    |> (*) 8
-    |> sprintf "qword [rsp + %i]" 
-  | Stack(PostStack _,_) -> failf "Should not reference postStack this far"
+  | Stack (VarStack i)
+    -> sprintf "qword [rsp + %i]" ((adjustment - i) * 8)
+  | Stack (PreStack i)
+    -> sprintf "qword [rsp + %i]" ((adjustment + i) * 8)
+  | Stack (PostStack _) 
+    -> failComp "Never write to poststack. Only push/pop"
 
-let serializeInstruction st = 
-  let serialize = serializeLocation st
+let updateAdjustment i = state {
+  let! a = getState
+  do! putState (a+i)
+}
+let serializeInstruction instr = state {
+  let! serialize = serializeLocation <!> getState
   let handleOp2 s l1 l2 = sprintf "        %s    %s, %s" s (serialize l1) (serialize l2)
   let handleOp1Loc s l1 = sprintf "        %s    %s" s (serialize l1)
   let handleOp1 s l1 = sprintf "        %s    %s" s l1 
   let handleOp0 s = sprintf "        %s" s
-  function 
-  | MovA (l1,l2) -> handleOp2 "mov" l1 l2
-  | AddA (l1,l2) -> handleOp2 "add" l1 l2
-  | SubA (l1,l2) -> handleOp2 "sub" l1 l2
-  | IMulA (l1,l2) -> handleOp2 "imul" l1 l2
-  | CmpA (l1,l2) -> handleOp2 "cmp" l1 l2
-  | JnzA (LabelName l) -> handleOp1 "jnz" l
-  | JmpA (LabelName l) -> handleOp1 "jmp" l
-  | SyscallA -> handleOp0 "syscall"
-  | LabelA (LabelName l) -> sprintf "%s:" l
-  | CallA (LabelName l) -> handleOp1 "call" l 
-  | RetA -> handleOp0 "ret"
-  | PushA l -> handleOp1Loc "push" (Reg l)
-  | PopA l -> handleOp1Loc "pop" (Reg l)
-  | XchgA (l1,l2) -> handleOp2 "xchg" l1 l2
-  | Nop -> ""
+  let str =  
+    match instr with 
+    | MovA (l1,l2) -> handleOp2 "mov" l1 l2
+    | AddA (l1,l2) -> handleOp2 "add" l1 l2
+    | SubA (l1,l2) -> handleOp2 "sub" l1 l2
+    | IMulA (l1,l2) -> handleOp2 "imul" l1 l2
+    | CmpA (l1,l2) -> handleOp2 "cmp" l1 l2
+    | JnzA (LabelName l) -> handleOp1 "jnz" l
+    | JmpA (LabelName l) -> handleOp1 "jmp" l
+    | SyscallA -> handleOp0 "syscall"
+    | LabelA (LabelName l) -> sprintf "%s:" l
+    | CallA (LabelName l) -> handleOp1 "call" l 
+    | RetA -> handleOp0 "ret"
+    | PushA l -> handleOp1Loc "push" (Reg l)
+    | PopA l -> handleOp1Loc "pop" (Reg l)
+    | Nop -> ""
+  match instr with 
+  | AddA (Reg RSP, Imm i) -> do! updateAdjustment i
+  | SubA (Reg RSP, Imm i) -> do! updateAdjustment -i
+  | PushA _ -> do! updateAdjustment -1
+  | PopA _ -> do! updateAdjustment 1
+  | _ -> return ()
 
+  return str
+}
 
-let introOutroAdj homes = getVarStackDepth homes + getAlignmentAdjust homes
-let intro sgn homes = 
-  LabelA (sgn |> getCallLab)
-  :: saveCalleeRegs homes
-  (*@ [ SubA (Reg RSP, Imm ( 8 * introOutroAdj homes))]*)
-let outro sgn homes =
-  [
-    LabelA (sgn |> getEndLab); 
-    AddA (Reg RSP, Imm (8 * introOutroAdj homes));
-  ]
-  (*
-  @ restoreCalleeRegs homes
-  @ [RetA] *)
-
-let funcToInstructions (sgn, homes, instrs) = 
-  intro sgn homes @ instrs@ outro sgn homes
-  |> List.map (serializeInstruction homes)
+let funcToInstructions (instrs) = 
+  instrs
+  |> mapM (serializeInstruction)
+  |> (eval |> flip <| 0)
   |> String.concat "\n"
 
 

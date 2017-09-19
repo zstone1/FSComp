@@ -15,11 +15,11 @@ type StackLoc =
   | VarStack of int
   | PostStack of int
 
-type Location<'t> = 
+type Location = 
   | Reg of Register
   | Data of string
   | Imm of int
-  | Stack of StackLoc * 't
+  | Stack of StackLoc 
 
 ///Traverses up the computation graph, starting at @n, to determine all of the nodes where @v is alive (assuming it is alive at @n) 
 let rec private trackParents' (v : MixedVar) (compGraph : DiGraph<_>) n = state {
@@ -82,8 +82,8 @@ let private colorGraph pickAndAssignColor (g: Map<_,_>) = state {
     let! newColor = 
       match x.Key with
       | (RegVar r)  -> x.Key |> assignColor (Reg r)
-      | (IncomingArg i)  -> x.Key |> assignColor (Stack (PreStack i, ()))
-      | (StackArg i) ->  x.Key |> assignColor (Stack (PostStack i, ()))
+      | (IncomingArg i)  -> x.Key |> assignColor (Stack (PreStack i))
+      | (StackArg i) ->  x.Key |> assignColor (Stack (PostStack i))
       | _ -> pickAndAssignColor x
     //This makes assumptions about the ml being valid,
     //in the sense of two fixed variables won't be in the same 
@@ -94,7 +94,7 @@ let private colorGraph pickAndAssignColor (g: Map<_,_>) = state {
 
 let colors = Seq.append 
                (List.map Reg [RDI;RSI;RDX;RCX;R8;R9;R15; R14; R13; R12; RBP; RBX; RAX])
-               (Seq.initInfinite (fun i -> Stack (VarStack i ,())) )
+               (Seq.initInfinite (Stack << VarStack) )
 
 let greedyNextColor cs = Seq.find (fun c -> not <| Seq.contains c cs) colors
 
@@ -137,7 +137,7 @@ let private unifyVars c =
     (replaceAtom c) 
     id
 
-type UnifiedSignature = CompSignature<Location<unit>>
+type UnifiedSignature = CompSignature<Location>
 
 let private unifyVariables (signature : MixedSignature ,ml) = 
   let coloring = colorML signature.args ml
@@ -152,7 +152,7 @@ let private unifyVariables (signature : MixedSignature ,ml) =
   (newSig, newIl)
 
 
-type UnifiedModule = CompModule<Location<unit>>
+type UnifiedModule = CompModule<Location>
 let unifyModule (m : MLModule) = 
   {
     UnifiedModule.lits = m.lits
