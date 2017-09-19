@@ -10,17 +10,17 @@ open FSharpx.State
 open MixedLang
 open Unification
  
-//Stack is organized like |stack args| variable homes | callee save | alignment | callerSave | stack args
-//                                    ^
-//                                 adjustment is difference to here.
+//Stack is organized like |stack args| return pointer | variable homes | callee save | alignment | callerSave | stack args
+//                                                    ^
+//                                         adjustment is difference to here.
 let serializeLocation adjustment = function
   | Imm i -> i.ToString()
   | Reg r -> (sprintf "%A" r).ToLowerInvariant()
   | Data s -> s
   | Stack (VarStack i)
-    -> sprintf "qword [rsp + %i]" ((adjustment - i) * 8)
+    -> sprintf "qword [rsp + %i]" -(adjustment + 8 +  (i * 8))
   | Stack (PreStack i)
-    -> sprintf "qword [rsp + %i]" ((adjustment + i) * 8)
+    -> sprintf "qword [rsp + %i]" -(adjustment - 8 - (i * 8))
   | Stack (PostStack _) 
     -> failComp "Never write to poststack. Only push/pop"
 
@@ -29,7 +29,8 @@ let updateAdjustment i = state {
   do! putState (a+i)
 }
 let serializeInstruction instr = state {
-  let! serialize = serializeLocation <!> getState
+  let! adjus = getState
+  let serialize = serializeLocation adjus
   let handleOp2 s l1 l2 = sprintf "        %s    %s, %s" s (serialize l1) (serialize l2)
   let handleOp1Loc s l1 = sprintf "        %s    %s" s (serialize l1)
   let handleOp1 s l1 = sprintf "        %s    %s" s l1 
@@ -53,8 +54,8 @@ let serializeInstruction instr = state {
   match instr with 
   | AddA (Reg RSP, Imm i) -> do! updateAdjustment i
   | SubA (Reg RSP, Imm i) -> do! updateAdjustment -i
-  | PushA _ -> do! updateAdjustment -1
-  | PopA _ -> do! updateAdjustment 1
+  | PushA _ -> do! updateAdjustment -8
+  | PopA _ -> do! updateAdjustment 8
   | _ -> return ()
 
   return str

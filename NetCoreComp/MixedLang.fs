@@ -74,6 +74,7 @@ let toMixedInstruct = function
       let stackArgs = r
                    |> List.indexed 
                    |> List.map (fst_set StackArg )
+                   |> List.rev
 
       let allArgs = regArgs @ stackArgs
                  |> List.map (fst >> VarAtom)
@@ -81,18 +82,31 @@ let toMixedInstruct = function
       let moves = regArgs @ stackArgs
                |> List.map ( snd_set toMLAtom >> AssignI)
 
-      [PrepareCall stackArgs.Length] 
+      [PrepareCall (regArgs.Length, stackArgs.Length)] 
       @ moves 
       @ [CallI (RegVar RAX |> Some, lab, allArgs)] 
-      @ [CompleteCall stackArgs.Length]
+      @ [CompleteCall (regArgs.Length, stackArgs.Length)]
       @ (rtnVar |> Option.map (fun v -> AssignI (v, RegVar RAX |> VarAtom)) |> Option.toList)
     | PrepareCall _ | CompleteCall _ -> failComp "IL should not have any prepare or complete calls"
 
-let toMixedSig (sgn : ILSignature) = {
-  MixedSignature.name = sgn.name
-  MixedSignature.returnTy = sgn.returnTy
-  MixedSignature.args = sgn.args |> List.map toMLVar
-}
+let toMixedSig (sgn : ILSignature) = 
+  let (regArgs, stackArgs) = (|SplitAt|) 6 sgn.args
+  let argMoves x y = x 
+                   |> Seq.map VarAtom
+                   |> Seq.zip (y |> List.map toMLVar)
+                   |> Seq.map AssignI
+                   |> Seq.toList
+  let fixedRegs = (callingConvention |> Seq.map (RegVar))
+  let regAssigns = argMoves fixedRegs regArgs
+
+  let fixedStack = (Seq.init stackArgs.Length MixedVar.IncomingArg)
+  let stackAssigns = argMoves fixedStack stackArgs
+  let newSgn = {
+    MixedSignature.name = sgn.name
+    MixedSignature.returnTy = sgn.returnTy
+    MixedSignature.args = fixedRegs |> Seq.append fixedStack |> Seq.toList
+  }
+  (newSgn, regAssigns @ stackAssigns)
 
 
 type CompModule<'varTy> = {funcs : (CompSignature<'varTy> * ( Instruct<'varTy> list)) list; lits : (string * string) list}
@@ -100,7 +114,8 @@ type MLModule = CompModule<MixedVar>
 let toML (m : FlattenedModule) = 
   let k = 1
   let convertFunc (astSig, instructs) = 
-    (toMixedSig astSig, instructs |> List.collect toMixedInstruct)
+    let (mixedSig, initial) = toMixedSig astSig
+    (mixedSig, initial @ (instructs |> List.collect toMixedInstruct))
   {
     lits = m.lits
     funcs = m.funcs |> List.map convertFunc

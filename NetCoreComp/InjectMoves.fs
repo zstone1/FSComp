@@ -43,7 +43,7 @@ let getSaveRegs used regs =
   |> Set.toList
 
 
-let calleeSave = [RBP; RBX; R12; R13; R14; R15]
+let calleeSave = []//[RBP; RBX; R12; R13; R14; R15]
 
 let private callerSave = [RDI; RSI; RDX; RCX; R8; R9; R10; R11;] 
 
@@ -74,16 +74,16 @@ let getMoves usedLocs endLab = function
   //Ok, this is where it gets weird. We assume the ML puts rtn in RAX correctly
   //we also know that the args are handled by previous assignments, and the PrepareCall/CompleteCall wrappers
   | CallI (rtn, lab, args) -> [], [CallA lab], []
-  | PrepareCall i 
-    -> let requireSaving = callerSave |> getSaveRegs usedLocs 
-       let offset = if ((requireSaving.Length + i) % 2) = 0 then [StackAdj -1] else []
+  | PrepareCall (regArgs, stackArgs)
+    -> let requireSaving = callerSave |> List.skip regArgs |> getSaveRegs usedLocs 
+       let offset = if ((requireSaving.Length + stackArgs) % 2) = 0 then [StackAdj -1] else []
        let saves = requireSaving |> List.map PushA
        offset, saves, []
-  | CompleteCall i 
-    -> let requireSaving = callerSave |> getSaveRegs usedLocs 
-       let offset = if ((requireSaving.Length + i) % 2) = 0 then [StackAdj 1] else []
+  | CompleteCall (regArgs, stackArgs)
+    -> let requireSaving = callerSave |> List.skip regArgs |> getSaveRegs usedLocs 
+       let offset = if ((requireSaving.Length + stackArgs) % 2) = 0 then [StackAdj 1] else []
        let saves = requireSaving |> List.map PopA |> List.rev
-       [StackAdj (i)], saves, offset
+       [StackAdj stackArgs], saves, offset
 
 let toAssignNode endLab usedLocs (c:CompNode<_>) = getMoves usedLocs endLab c.instruction
 
@@ -108,7 +108,7 @@ let toAssembly = function
          MovA (Stack(a), Reg R10) ]
 
   | MovLoc (Reg r, Stack (PostStack _))
-      -> [PopA (r)]
+     -> [PopA (r)]
 
   | MovLoc (l1,l2) -> [MovA (l1,l2)]
   | PushM r -> [PushA r]
@@ -127,15 +127,20 @@ type AsmModule = {funcs : (Assembly list) list;
 let saveCalleeRegs homes = getSaveRegs homes calleeSave 
                         |> List.map PushM 
                         |> List.collect toAssembly
-let stackHomesOffset homes = homes 
-                          |> List.map (function Stack (VarStack i) -> i | _ -> 0) 
-                          |> List.max
-                          |> ((*) 8)
+let stackHomesOffset homes = 
+  let homeCount = homes 
+               |> List.map (function Stack (VarStack i) -> i + 1  | _ -> 0) 
+               |> List.max
+  let savedRegsCount = getSaveRegs homes calleeSave |> List.length
+  let alignment = (savedRegsCount + homeCount) % 2
+
+  (homeCount + alignment) * 8
 
 let restoreCalleeRegs homes = getSaveRegs homes calleeSave 
                            |> List.rev 
                            |> List.map PopM 
                            |> List.collect toAssembly
+
 
 let assignMovesFunc (sgn, ml) = 
   let savedVariables = (ml |> List.collect getReadVariables)

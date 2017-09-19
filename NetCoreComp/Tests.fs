@@ -252,6 +252,7 @@ let ``calling convention 8`` () = checkStdOut "Args 1 2 3 4 5 6 7 8\n" @"
       return 0;
     }"
 
+(*
 [<Test>]
 let ``calling conventionVerify 9`` () = checkStdOut "Args 1 2 3 4 5 6 7 8 9\n" @" 
     public int main(){
@@ -349,3 +350,4 @@ let ``swapparams`` () = checkCode 4 @"
       return i - j;
     }
     "
+    *)
