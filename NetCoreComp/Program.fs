@@ -13,14 +13,17 @@ open MixedLang
 [<EntryPoint>]
 let main argv =
   try
-    let prgm = @"
-    public int main(){
-      int x = 1;
-      return foo(x);
+    let prgm = @" 
+
+    public int foo(string s, int a){
+      printf(s,a);
+      return 0;
     }
-    
-    public int foo(int a){
-      return a;
+
+    public int main(){
+      string s = ""Args %i"";
+      foo(s,1);
+      return 0;
     }"
     globalSettings <- {allocation = AffineGreedy}
     let p = prgm 
@@ -28,11 +31,11 @@ let main argv =
          |> convertModule
         ||> flattenModule
          |> toML
+//         |> (fun i -> printfn "%A" i; i)
          |> unifyModule
-         //|> (fun i -> printfn "%A" i; i)
-         //|> unifyModule
-         //|> (fun i -> printfn "%A" i; i)
+         |> (fun i -> printfn "%A" i; i)
          |> assignMovesToModules
+//         |> (fun i -> printfn "%A" i; i)
          |> serializeModule
 //         |> (fun i -> i.funcInstructions.Head |> snd)
 //    do p.ainstructs |> List.iter (printfn "%A")

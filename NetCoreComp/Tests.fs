@@ -21,7 +21,7 @@ let runProc dir f args =
   do proc.WaitForExit()
   proc
 
-let mutable i =  0
+let mutable i = 0
 let executeInDir testDir prgm= 
   let proc = runProc testDir
   let p = prgm 
@@ -41,7 +41,10 @@ let executeInDir testDir prgm=
   let text = System.IO.File.ReadAllText(dir + "/result.txt")
   (result.ExitCode, text)
 
-let execute = executeInDir TestContext.CurrentContext.Test.Name 
+let execute s =
+  do i <- i+1
+  executeInDir (TestContext.CurrentContext.Test.Name + "_" + i.ToString()) s
+             
 
 let checkvalForSettings (f: _ -> 'a) (i:'a) s settings = 
   try 
@@ -52,8 +55,8 @@ let checkvalForSettings (f: _ -> 'a) (i:'a) s settings =
 
 let settingsOpts = [
   {allocation = RegGreedy}
-  {allocation = StackOnly}
-  {allocation = AffineGreedy}
+//  {allocation = StackOnly}
+//  {allocation = AffineGreedy}
 ]
 
 let checkval (f:_ -> 'a) (i:'a) s = 
@@ -71,7 +74,8 @@ let simplest () = checkCode 5 @"
          return y;
      }"
 
-(*
+
+
 [<Test>]
 let ``simple adding`` () = checkCode 4 @"
      public int main(){
@@ -79,6 +83,7 @@ let ``simple adding`` () = checkCode 4 @"
          y = 2 + 2;
          return y;
      }" 
+
 [<Test>]
 let ``simple if`` () = checkCode 2 @"
         public int main(){
@@ -89,6 +94,8 @@ let ``simple if`` () = checkCode 2 @"
         }
         return 2;
    }"
+
+     
 [<Test>]
 let ``simple if skip`` () = checkCode 1 @"
     public int main(){
@@ -99,6 +106,8 @@ let ``simple if skip`` () = checkCode 1 @"
         }
         return 2;
    }"
+ 
+
 [<Test>]
 let ``Add a lot`` () = checkCode 40 @"
    public int main(){
@@ -125,12 +134,14 @@ let ``Add a lot`` () = checkCode 40 @"
        x = x + 2;
        return x;
   }"
+  
 [<Test>]
 let ``NestedAdd`` () = checkCode 12 @"
   public int main(){
        int x = (((((2 + 2) + 2) + 2) + 2) + 2);
        return x;
   }"
+
 [<Test>]
 let ``NestedAddReverse`` () = checkCode 12 @"
   public int main(){
@@ -185,6 +196,8 @@ let ``call no args 2`` () = checkCode 7 @"
   public int other() {
     return 5;
   } " 
+
+
 [<Test>]
 let ``call one arg`` () = checkCode 7 @"
   public int main(){
@@ -336,4 +349,3 @@ let ``swapparams`` () = checkCode 4 @"
       return i - j;
     }
     "
-*)

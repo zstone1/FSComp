@@ -45,7 +45,7 @@ let getSaveRegs used regs =
 
 let calleeSave = [RBP; RBX; R12; R13; R14; R15]
 
-let private callerSave = [RAX; RDI; RSI; RDX; RCX; R8; R9; R10; R11;] 
+let private callerSave = [RDI; RSI; RDX; RCX; R8; R9; R10; R11;] 
 
 let fromAtom = function 
   | VarAtom v -> v
@@ -76,14 +76,14 @@ let getMoves usedLocs endLab = function
   | CallI (rtn, lab, args) -> [], [CallA lab], []
   | PrepareCall i 
     -> let requireSaving = callerSave |> getSaveRegs usedLocs 
-       let offset = if requireSaving.Length + i % 2 = 0 then [StackAdj -8] else []
+       let offset = if ((requireSaving.Length + i) % 2) = 0 then [StackAdj -1] else []
        let saves = requireSaving |> List.map PushA
        offset, saves, []
   | CompleteCall i 
     -> let requireSaving = callerSave |> getSaveRegs usedLocs 
-       let offset = if requireSaving.Length + i % 2 = 0 then [StackAdj -8] else []
+       let offset = if ((requireSaving.Length + i) % 2) = 0 then [StackAdj 1] else []
        let saves = requireSaving |> List.map PopA |> List.rev
-       [StackAdj (8*i)], saves, [StackAdj 8]
+       [StackAdj (i)], saves, offset
 
 let toAssignNode endLab usedLocs (c:CompNode<_>) = getMoves usedLocs endLab c.instruction
 
@@ -127,7 +127,10 @@ type AsmModule = {funcs : (Assembly list) list;
 let saveCalleeRegs homes = getSaveRegs homes calleeSave 
                         |> List.map PushM 
                         |> List.collect toAssembly
-let stackHomesOffset homes = List.maxBy (function Stack (VarStack i) -> i | _ -> 0) homes
+let stackHomesOffset homes = homes 
+                          |> List.map (function Stack (VarStack i) -> i | _ -> 0) 
+                          |> List.max
+                          |> ((*) 8)
 
 let restoreCalleeRegs homes = getSaveRegs homes calleeSave 
                            |> List.rev 
@@ -138,11 +141,12 @@ let assignMovesFunc (sgn, ml) =
   let savedVariables = (ml |> List.collect getReadVariables)
   let body = computeMoves sgn ml |> List.collect getAssemblyForNode
   let init = LabelA (getCallLab sgn) 
-          :: SubA (Reg RSP, stackHomesOffset savedVariables)
+          :: SubA (Reg RSP, stackHomesOffset savedVariables |> Imm)
           :: saveCalleeRegs savedVariables
   let finish = LabelA (getEndLab sgn) 
             :: restoreCalleeRegs savedVariables
-             @ [AddA (Reg RSP, stackHomesOffset savedVariables)]
+             @ [AddA (Reg RSP, stackHomesOffset savedVariables |> Imm)]
+             @ [RetA]
   init @ body @ finish
       
 let assignMovesToModules (x:UnifiedModule) = 

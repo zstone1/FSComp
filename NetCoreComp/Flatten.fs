@@ -108,8 +108,9 @@ let getGuardVar =
            return tempVar }
 
 let rec flattenStatement = function
-  | ReturnStat e -> state { let! flatE = flattenExpression e
-                            yield ReturnI flatE}
+  | ReturnStat e -> state { 
+      let! flatE = flattenExpression e
+      yield ReturnI flatE}
   | Declaration _ -> empty
   | Execution e -> flattenExpression e |>> ignore
   | Assignment ({name = n},e) -> state {let! flatE = flattenExpression e

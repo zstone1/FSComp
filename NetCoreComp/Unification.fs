@@ -45,7 +45,8 @@ let private trackParents v compGraph n = exec (trackParents' v compGraph n) []
 ///the variable is live.
 let private getLiveNodes compGraph = query {
   for (k,c) in Map.toSeq compGraph.nodes do
-  for var in getReadVariables c.instruction do
+  //TODO: optimize away writes to variables that are never read from.
+  for var in getReadVariables c.instruction @ getWrittenVariables c.instruction do
   for l in  trackParents var compGraph k do
   select (var, l)
 }
@@ -59,7 +60,7 @@ let private toLivnessGraph (s:seq<_>) = query {
   select (v1, v2) 
   distinct into x
   groupBy (fst x) into g 
-  select (g.Key, Seq.map snd g)
+  select (g.Key, g |> Seq.map snd |> Seq.filter (fun v' -> v' <> g.Key))
 }
 
 let private assignColor (color) (node : MixedVar) = state {
@@ -69,7 +70,7 @@ let private assignColor (color) (node : MixedVar) = state {
 
 let private validateColoring (adjNodes) thisColor = state {
   let! coloringSoFar = getState
-  let colors = adjNodes |> List.map (Map.find|>flip<| coloringSoFar)
+  let colors = adjNodes |> List.choose (Map.tryFind|>flip<| coloringSoFar)
   if colors |> List.contains thisColor 
   then failComp "Graph coloring failed due to bad fixed colors"
   else return ()
@@ -78,18 +79,21 @@ let private validateColoring (adjNodes) thisColor = state {
 ///Retains color for those variables that are in fixed positions
 ///Otherwise use @pickAndAssignColor
 let private colorGraph pickAndAssignColor (g: Map<_,_>) = state {
-  for x in g do
+  let sorted = List.sortBy (fst >> function 
+    | RegVar _ | IncomingArg _ | StackArg _ -> 0
+    | _ -> 1)
+  for (key, adjs) in sorted (g |> Map.toList ) do
     let! newColor = 
-      match x.Key with
-      | (RegVar r)  -> x.Key |> assignColor (Reg r)
-      | (IncomingArg i)  -> x.Key |> assignColor (Stack (PreStack i))
-      | (StackArg i) ->  x.Key |> assignColor (Stack (PostStack i))
-      | _ -> pickAndAssignColor x
+      match key with
+      | (RegVar r)  -> key |> assignColor (Reg r) 
+      | (IncomingArg i)  -> key |> assignColor (Stack (PreStack i)) 
+      | (StackArg i) ->  key |> assignColor (Stack (PostStack i))
+      | _ -> pickAndAssignColor key adjs
     //This makes assumptions about the ml being valid,
     //in the sense of two fixed variables won't be in the same 
     //place at the same time. This will fail fast if it's not valid.
     //It can always be patched by adding more temp variables.
-    do! validateColoring g.[x.Key] newColor
+    do! validateColoring g.[key] newColor
 }
 
 let colors = Seq.append 
@@ -98,11 +102,11 @@ let colors = Seq.append
 
 let greedyNextColor cs = Seq.find (fun c -> not <| Seq.contains c cs) colors
 
-let private pickAndAssignGreedy (x : System.Collections.Generic.KeyValuePair<_,_>) = state {
+let private pickAndAssignGreedy key adjs = state {
   let! coloringSoFar = getState
-  let n = Seq.choose (Map.tryFind |> flip <| coloringSoFar)  x.Value
+  let n = Seq.choose (Map.tryFind |> flip <| coloringSoFar) adjs
   let c = greedyNextColor n
-  return! assignColor c x.Key
+  return! assignColor c key
 }
   
 let private colorGraphGreedy a = colorGraph pickAndAssignGreedy a
@@ -113,15 +117,16 @@ let private addFunctionArgNode args g =
   let argNodes = args |> Seq.map addArg 
   argNodes |> Seq.append g
 
-let private colorML args = 
-     toGraph
-  >> getLiveNodes
-  >> addFunctionArgNode args
-  >> toLivnessGraph
-  >> Map.ofSeq
-  >> Map.map (konst List.ofSeq)
-  >> colorGraphGreedy
-  >> (exec |> flip <| Map.empty)
+let private colorML args x = 
+  let x2 = toGraph x
+  let x3 = getLiveNodes x2
+  let x4 = addFunctionArgNode args x3
+  let x5 = toLivnessGraph x4
+  let x6 = Map.ofSeq x5
+  let x7 = Map.map (konst List.ofSeq) x6
+  let x8 =  colorGraphGreedy x7
+  let x9 =  (exec |> flip <| Map.empty) x8
+  x9
 
 let private replaceVar (coloring:Map<_,_>) v = coloring.[v] 
 

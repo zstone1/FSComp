@@ -58,7 +58,11 @@ let toMixedInstruct = function
   | JmpI (l) -> [JmpI l]
   | JnzI (l) -> [JnzI l]
   | LabelI (l) -> [LabelI l]
-  | ReturnI (v) -> [ReturnI (toMLAtom v)]
+  | ReturnI (v) ->
+    [
+      AssignI (RegVar RAX, toMLAtom v)
+      ReturnI (RegVar RAX |> VarAtom)
+    ]
   | CallI (v,lab, SplitAt 6 (l,r)) -> 
       let rtnVar = Option.map toMLVar v
 
@@ -77,7 +81,11 @@ let toMixedInstruct = function
       let moves = regArgs @ stackArgs
                |> List.map ( snd_set toMLAtom >> AssignI)
 
-      [PrepareCall stackArgs.Length] @ moves @  [CallI (rtnVar, lab, allArgs)] @ [CompleteCall stackArgs.Length]
+      [PrepareCall stackArgs.Length] 
+      @ moves 
+      @ [CallI (RegVar RAX |> Some, lab, allArgs)] 
+      @ [CompleteCall stackArgs.Length]
+      @ (rtnVar |> Option.map (fun v -> AssignI (v, RegVar RAX |> VarAtom)) |> Option.toList)
     | PrepareCall _ | CompleteCall _ -> failComp "IL should not have any prepare or complete calls"
 
 let toMixedSig (sgn : ILSignature) = {
