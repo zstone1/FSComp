@@ -43,7 +43,7 @@ let getSaveRegs used regs =
   |> Set.toList
 
 
-let calleeSave = []//[RBP; RBX; R12; R13; R14; R15]
+let calleeSave = [RBP; RBX; R12; R13; R14; R15]
 
 let private callerSave = [RDI; RSI; RDX; RCX; R8; R9; R10; R11;] 
 
