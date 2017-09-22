@@ -14,12 +14,11 @@ open MixedLang
 let main argv =
   try
     let prgm = @"
-    public int do(int i){
-      printf(""%i"",i);
-      return i;
-    }
     public int main(){
-      return do(do(2));
+      int a = 1;
+      int b = 2;
+      int c = 3;
+      return 2 + b;
     }"
     globalSettings <- {allocation = AffineGreedy}
     let p = prgm 

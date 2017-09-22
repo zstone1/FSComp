@@ -21,34 +21,35 @@ type Location =
   | Imm of int
   | Stack of StackLoc 
 
+type LivenessTraversal = {witnessed : NodeId list; usedAssignments : NodeId List}
 ///Traverses up the computation graph, starting at @n, to determine all of the nodes where @v is alive (assuming it is alive at @n) 
-let rec private trackParents' (v : MixedVar) (compGraph : DiGraph<_>) n = state {
+let rec private trackParents' (v  ) (compGraph : DiGraph<_>) n = state {
   let! s = getState
-  let completedLoop = List.contains n s
+  let completedLoop = List.contains n s.witnessed
   match completedLoop with
   | true -> return () 
   | false -> 
-      do! (n :: s) |> putState 
+      do! { s with witnessed = n:: s.witnessed}|> putState 
       let writtenVars = compGraph.nodes.[n].instruction |> getWrittenVariables
       let deadAbove = List.contains v writtenVars 
       match deadAbove with
-      | true -> return () 
+      | true -> do! {s with usedAssignments = n :: s.usedAssignments} |> putState
       | false ->
          let parents = compGraph.adj.[n].ins
          //non-tail recursive... probably bad.
          do! mapU (trackParents' v compGraph) parents 
 }        
 
-let private trackParents v compGraph n = exec (trackParents' v compGraph n) []
+let private trackParents v compGraph n = exec (trackParents' v compGraph n) {witnessed = []; usedAssignments = []}
 
 ///Returns a pair of Variable->int for every node where 
 ///the variable is live.
-let private getLiveNodes compGraph = query {
+let private getTraversals compGraph = query {
   for (k,c) in Map.toSeq compGraph.nodes do
   //TODO: optimize away writes to variables that are never read from.
-  for var in getReadVariables c.instruction @ getWrittenVariables c.instruction do
-  for l in  trackParents var compGraph k do
-  select (var, l)
+  for var in getReadVariables c.instruction do
+  let result = trackParents var compGraph k 
+  select (var, result)
 }
 
 ///Given the list of variable -> live node pairs,
@@ -111,42 +112,49 @@ let private pickAndAssignGreedy key adjs = state {
   
 let private colorGraphGreedy a = colorGraph pickAndAssignGreedy a
 
-let private addFunctionArgNode args g = 
-  let nodeId = -1 |> Node
-  let addArg x = (x, nodeId)
-  let argNodes = args |> Seq.map addArg 
-  argNodes |> Seq.append g
+let private pruneUnusedAssignments ml =
+  //Note that it's critical that everything here retains order.
+  let graph = ml |> toGraph
+  let traverals = graph |> getTraversals
+  let usedIds = traverals |> Seq.collect (fun (_,i) -> i.usedAssignments)
+  let isUsed nodeId = function  
+    | {instruction = AssignI (MLVarName _, _)} -> usedIds |> Seq.contains nodeId 
+    | _ -> true
+  let pruned = graph.nodes 
+            |> Map.filter isUsed 
+            |> Map.map (fun k v -> v.instruction)
+  pruned |> mapValues
+
+let rec private pruneMlUntilDone lastOne ml = 
+  if lastOne = List.length ml
+  then ml 
+  else pruneMlUntilDone (List.length ml) (pruneUnusedAssignments ml)
 
 let private colorML args x = 
-  let x2 = toGraph x
-  let x3 = getLiveNodes x2
-  let x4 = addFunctionArgNode args x3
-  let x5 = toLivnessGraph x4
+  let graph = x |> toGraph 
+  let traverals = graph |> getTraversals
+  let nodes = traverals |> Seq.collect (fun (v, i) -> [for n in i.witnessed do yield (v,n)])
+  let x5 = toLivnessGraph nodes
   let x6 = Map.ofSeq x5
   let x7 = Map.map (konst List.ofSeq) x6
   let x8 =  colorGraphGreedy x7
   let x9 =  (exec |> flip <| Map.empty) x8
   x9
 
-let private replaceVar (coloring:Map<_,_>) v = coloring.[v] 
+let private replaceVar (coloring:Map<_,_>) = function
+  | MLVarName _ as v -> coloring.[v] 
+  | (RegVar r) -> Reg r
+  | (IncomingStack i) -> Stack (PreStack i)
+  | OutgoingStack -> Stack PostStack
 
-let private replaceAtom coloring = function 
-  | VarAtom v -> replaceVar coloring v |> VarAtom
-  | IntLitAtom i -> IntLitAtom i
-  | DataRefAtom s -> DataRefAtom s
-
-let private unifyVars c = 
-  mapInstruct 
-    (replaceVar c) 
-    (replaceVar c |> Option.map)
-    (replaceAtom c) 
-    id
+let private unifyVars c = mapInstructBasic (replaceVar c)
 
 type UnifiedSignature = CompSignature<Location>
 
-let private unifyVariables (signature : MixedSignature ,ml) = 
-  let coloring = colorML signature.args ml
-  let newIl = ml |> List.map (unifyVars coloring)
+let private unifyVariables (signature : MixedSignature , ml) = 
+  let pruned = pruneMlUntilDone -1 ml
+  let coloring= colorML signature.args pruned
+  let newIl = pruned |> List.map (unifyVars coloring)
   let newSig = 
     {
       UnifiedSignature.args = List.map (replaceVar coloring) signature.args
