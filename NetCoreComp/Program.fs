@@ -14,12 +14,13 @@ open MixedLang
 let main argv =
   try
     let prgm = @"
-    public int main(){
-      int a = 1;
-      int b = 2;
-      int c = 3;
-      return 2 + b;
-    }"
+  public int main(){
+       int x = 3;
+       x = x + x;
+       int y = x + 5;
+       y = x + y;
+       return y;
+  }" 
     globalSettings <- {allocation = AffineGreedy}
     let p = prgm 
          |> parseProgram 

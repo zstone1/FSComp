@@ -101,8 +101,8 @@ let getReadVariables = function
     -> []
 
 let getWrittenVariables = function 
-  | AssignI (x,_) | CallI (Some x,_,_) -> [x]
-  | _ -> []
+  | AssignI (x,_) | CallI (Some x,_,_) -> Some x
+  | _ -> None
 
  
 let private setIns f s = {s with ins = f s.ins}

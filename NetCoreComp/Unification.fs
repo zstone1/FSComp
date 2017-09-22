@@ -21,23 +21,23 @@ type Location =
   | Imm of int
   | Stack of StackLoc 
 
-type LivenessTraversal = {witnessed : NodeId list; usedAssignments : NodeId List}
-///Traverses up the computation graph, starting at @n, to determine all of the nodes where @v is alive (assuming it is alive at @n) 
+type LivenessTraversal = {witnessed : (NodeId * NodeId) list; usedAssignments : NodeId List}
+///Traverses up the computation graph, starting at @n, to determine all of the nodes where @v is alive (assuming it is alive at below or in @n) 
 let rec private trackParents' (v  ) (compGraph : DiGraph<_>) n = state {
   let! s = getState
-  let completedLoop = List.contains n s.witnessed
-  match completedLoop with
-  | true -> return () 
-  | false -> 
-      do! { s with witnessed = n:: s.witnessed}|> putState 
-      let writtenVars = compGraph.nodes.[n].instruction |> getWrittenVariables
-      let deadAbove = List.contains v writtenVars 
-      match deadAbove with
-      | true -> do! {s with usedAssignments = n :: s.usedAssignments} |> putState
-      | false ->
-         let parents = compGraph.adj.[n].ins
-         //non-tail recursive... probably bad.
-         do! mapU (trackParents' v compGraph) parents 
+  let completedLoop = List.contains n (s.witnessed |> List.map snd)
+  let parents = compGraph.adj.[n].ins
+  let parentEdges = parents  |> List.map (fun i -> (i,n))
+  let writtenVars = compGraph.nodes.[n].instruction |> getWrittenVariables
+
+  match writtenVars with
+  | Some v' when v' = v 
+    -> do! (fun st -> { st with usedAssignments = n :: s.usedAssignments}) |> updateStateU
+  | Some _ | None 
+    -> do! (fun st -> { st with witnessed = parentEdges @ st.witnessed}) |> updateStateU
+       if completedLoop
+         then return ()
+         else do! mapU (trackParents' v compGraph) parents
 }        
 
 let private trackParents v compGraph n = exec (trackParents' v compGraph n) {witnessed = []; usedAssignments = []}
