@@ -72,8 +72,13 @@ let getMoves usedLocs endLab = function
   | ReturnI v -> [], [JmpA endLab], []
 
   //Ok, this is where it gets weird. We assume the ML puts rtn in RAX correctly
-  //we also know that the args are handled by previous assignments, and the PrepareCall/CompleteCall wrappers
-  | CallI (rtn, lab, args) -> [], [CallA lab], []
+  //And we put requirements during unification on the register args.
+  //But the stack args are unhandled. So we must push them in reverse. 
+  | CallI (rtn, lab, SplitAt 6 (_,r)) 
+    -> [for v in r |> List.rev do 
+          yield MovLoc (Stack PostStack , v)], 
+       [CallA lab], 
+       []
   | PrepareCall (regArgs, stackArgs)
     -> let requireSaving = callerSave |> List.skip regArgs |> getSaveRegs usedLocs 
        let offset = if ((requireSaving.Length + stackArgs) % 2) = 0 then [StackAdj -1] else []
@@ -100,14 +105,14 @@ let toAssembly = function
   | StackAdj i when i > 0 -> [AddA (Reg RSP, Imm (8 * i))]
   | StackAdj i when i < 0 -> [SubA (Reg RSP, Imm (8 * -i))]
   | StackAdj i -> []
-  | MovLoc (Stack (PostStack _), Reg r) -> [PushA r]
-  | MovLoc (Stack (PostStack _), l) -> [ MovA (Reg R10, l); PushA R10 ]
+  | MovLoc (Stack PostStack, Reg r) -> [PushA r]
+  | MovLoc (Stack PostStack, l) -> [ MovA (Reg R10, l); PushA R10 ]
 
-  | MovLoc (Stack (a), Stack(c)) 
-     -> [MovA (Reg R10, Stack(c)) 
-         MovA (Stack(a), Reg R10) ]
+  | MovLoc (Stack a, Stack c) 
+     -> [MovA (Reg R10, Stack c) 
+         MovA (Stack a, Reg R10) ]
 
-  | MovLoc (Reg r, Stack (PostStack _))
+  | MovLoc (Reg r, Stack PostStack)
      -> [PopA (r)]
 
   | MovLoc (l1,l2) -> [MovA (l1,l2)]

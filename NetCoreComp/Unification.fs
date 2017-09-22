@@ -13,7 +13,7 @@ open MixedLang
 type StackLoc = 
   | PreStack of int
   | VarStack of int
-  | PostStack of int
+  | PostStack //PostStack sucks, and is handled by carefully keeping track of the order of operations.
 
 type Location = 
   | Reg of Register
@@ -87,7 +87,7 @@ let private colorGraph pickAndAssignColor (g: Map<_,_>) = state {
       match key with
       | (RegVar r)  -> key |> assignColor (Reg r) 
       | (IncomingStack i)  -> key |> assignColor (Stack (PreStack i)) 
-      | (OutgoingStack i) ->  key |> assignColor (Stack (PostStack i))
+      | OutgoingStack -> key |> assignColor (Stack PostStack)
       | _ -> pickAndAssignColor key adjs
     //This makes assumptions about the ml being valid,
     //in the sense of two fixed variables won't be in the same 

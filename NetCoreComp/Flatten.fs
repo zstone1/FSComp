@@ -46,6 +46,15 @@ let mapInstruct f f' g h = function
   | PrepareCall (a,b) -> PrepareCall (a,b)
   | CompleteCall  (a,b) -> CompleteCall (a,b)
 
+let mapInstructBasic f = 
+  let optMap = Option.map f
+  let atomMap = function 
+    | VarAtom v -> VarAtom (f v)
+    | DataRefAtom d -> DataRefAtom d
+    | IntLitAtom i -> IntLitAtom i
+  let labelMap = id
+  mapInstruct f optMap atomMap labelMap
+
 type InterSt = {
   uniqueNum : int
   instructs : ILInstruct list
@@ -90,14 +99,14 @@ let getExprValue flatten = function
       handleArith SubI flatten x y
   | ASTFunc ({name = MultName; argTys = Some [IntTy; IntTy]}, [x;y]) ->
       handleArith IMulI flatten x y
-  | ASTFunc (s,args) -> state {
-    let regArgs = min args.Length 6
-    let stackArgs = max (args.Length - 6) 0
-    yield PrepareCall (regArgs, stackArgs)
-    let! args = mapM flatten args 
+  | ASTFunc (s, (SplitAt 6 (l,r) as args)) -> state {
+    //A subtelty here. the args must be computed before PrepareCall,
+    //Otherwise nested function calls produce incorrect stack alignment.
+    let! args = mapM flatten args
+    yield PrepareCall (l.Length, r.Length)
     let! rtnVar = makeVariable
     yield CallI (Some rtnVar, LabelName s.name, args )
-    yield CompleteCall (regArgs, stackArgs)
+    yield CompleteCall (l.Length, r.Length)
     return rtnVar |> VarAtom }
 
 let rec flattenExpression e = state {

@@ -86,16 +86,19 @@ let private getVariable = function
   | DataRefAtom i -> None
   | VarAtom v -> Some v
 
-let private getVariable' x = x |> getVariable |> Option.toList
-
 let getReadVariables = function 
-  | ReturnI x | AssignI (_,x) 
-    -> x |> getVariable'
-  | JmpI _ | JnzI _ | LabelI _ | CompleteCall _ | PrepareCall _
+  | ReturnI x | AssignI (_, (VarAtom x)) 
+    -> [x] 
+  | CallI (_,_,c) 
+    -> c 
+  | CmpI (a, b) | AddI (a,b) | SubI (a,b)  
+  | IMulI (a,b) | CmpI (a,b)
+    -> match b with 
+       | VarAtom b' -> [a; b']
+       | IntLitAtom _ | DataRefAtom _ -> [a]
+  | JmpI _ | JnzI _ | LabelI _ | AssignI _ 
+  | CompleteCall _ | PrepareCall _
     -> []
-  | CallI (_,_,c) -> c |> List.collect getVariable'
-  | CmpI (a,b) | AddI (a,b) | SubI (a,b)  | IMulI (a,b) | CmpI (a,b)
-      -> a :: (b |> getVariable')
 
 let getWrittenVariables = function 
   | AssignI (x,_) | CallI (Some x,_,_) -> [x]

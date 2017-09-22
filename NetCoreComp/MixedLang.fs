@@ -27,7 +27,7 @@ type Register =
 type MixedVar = 
   | MLVarName of string
   | RegVar of Register
-  | OutgoingStack of int
+  | OutgoingStack //outgoing stack is handled by keeping track of order. A pain, but order matters anyway.
   | IncomingStack of int
 
 type MLAtom = Atom<MixedVar>
@@ -43,10 +43,10 @@ type MixedSignature = CompSignature<MixedVar>
 let toMLVar = function
   | ILVarName s -> MLVarName s
 
-let toMLAtom = function
+let toMLAtom vMap= function
   | IntLitAtom i -> IntLitAtom i
   | DataRefAtom s -> DataRefAtom s
-  | VarAtom (ILVarName s) -> VarAtom (MLVarName s)
+  | VarAtom v -> VarAtom (vMap v) 
 let callingConvention = [RDI; RSI; RDX; RCX; R8; R9]
 
 let getRequirements = function 
@@ -60,89 +60,48 @@ let getRequirements = function
     [
       yield! v |> map (fun i -> (i, RegVar RAX)) |> toList
 
-      let regArgs = callingConvention
-                 |> List.take l.Length 
-                 |> List.map (RegVar)
-                 |> (List.zip l) 
-      yield! regArgs
+      yield! callingConvention
+          |> List.take l.Length 
+          |> List.map (RegVar)
+          |> (List.zip l) 
 
-      let stackArgs = r
-                   |> List.indexed 
-                   |> List.map (fst_set OutgoingStack >> swap)
-                   |> List.rev
-      yield! stackArgs
+//      yield! r
+//          |> List.indexed 
+//          |> List.map (fst_set OutgoingStack >> swap)
+//          |> List.rev
     ]
-(*
-let toMixedInstruct = function 
-  | AddI (a,b) -> [AddI ( toMLVar a, toMLAtom b)]
-  | CmpI (a,b) -> [CmpI ( toMLVar a, toMLAtom b)]
-  | SubI (a,b) -> [SubI ( toMLVar a, toMLAtom b)]
-  | IMulI (a,b) -> [IMulI ( toMLVar a, toMLAtom b)]
-  | AssignI (a,b) -> [AssignI ( toMLVar a, toMLAtom b)]
-  | JmpI (l) -> [JmpI l]
-  | JnzI (l) -> [JnzI l]
-  | LabelI (l) -> [LabelI l]
-  | ReturnI (v) ->
-    [
-      AssignI (RegVar RAX, toMLAtom v)
-      ReturnI (RegVar RAX |> VarAtom)
-    ]
-  | CallI (v,lab, SplitAt 6 (l,r)) -> 
-      let rtnVar = Option.map toMLVar v
 
-      let regArgs = callingConvention
-                 |> List.take l.Length 
-                 |> List.map (RegVar)
-                 |> (List.zip |> flip <| l)
+let incomingArgRequirements (SplitAt 6 (regArgs, stackArgs)) = [
+  yield! callingConvention |> List.take regArgs.Length |> List.map RegVar |> List.zip regArgs
+  yield! IncomingStack |> List.init stackArgs.Length |> List.zip stackArgs
+]
 
-      let stackArgs = r
-                   |> List.indexed 
-                   |> List.map (fst_set OutgoingStack )
-                   |> List.rev
-
-      let allArgs = regArgs @ stackArgs
-                 |> List.map (fst >> VarAtom)
-
-      let moves = regArgs @ stackArgs
-               |> List.map ( snd_set toMLAtom >> AssignI)
-
-      [PrepareCall (regArgs.Length, stackArgs.Length)] 
-      @ moves 
-      @ [CallI (RegVar RAX |> Some, lab, allArgs)] 
-      @ [CompleteCall (regArgs.Length, stackArgs.Length)]
-      @ (rtnVar |> Option.map (fun v -> AssignI (v, RegVar RAX |> VarAtom)) |> Option.toList)
-    | PrepareCall _ | CompleteCall _ -> failComp "IL should not have any prepare or complete calls"
-
-let toMixedSig (sgn : ILSignature) = 
-  let (regArgs, stackArgs) = (|SplitAt|) 6 sgn.args
-  let argMoves x y = x 
-                   |> Seq.map VarAtom
-                   |> Seq.zip (y |> List.map toMLVar)
-                   |> Seq.map AssignI
-                   |> Seq.toList
-  let fixedRegs = (callingConvention |> Seq.map (RegVar))
-  let regAssigns = argMoves fixedRegs regArgs
-
-  let fixedStack = (Seq.init stackArgs.Length MixedVar.IncomingStack)
-  let stackAssigns = argMoves fixedStack stackArgs
+let toMixedSig (sgn :ILSignature) = 
+  let assignments = incomingArgRequirements sgn.args
   let newSgn = {
     MixedSignature.name = sgn.name
     MixedSignature.returnTy = sgn.returnTy
-    MixedSignature.args = fixedRegs |> Seq.append fixedStack |> Seq.toList
+    MixedSignature.args = assignments |> List.map snd
   }
-  (newSgn, regAssigns @ stackAssigns)
+  (newSgn, assignments)
 
-*)
+let convertFuncToML sgn il = 
+  let (newSgn, initAssign) = toMixedSig sgn
+  let bodyAssign = il |> List.collect getRequirements
+  let requirementsMap = Map.ofList (initAssign @ bodyAssign)
+  let convertVar i = requirementsMap.TryFind i |> Option.defaultValue (toMLVar i)
+  let newBody = il |> List.map (mapInstructBasic convertVar)
+
+  (newSgn, newBody)
+             
+
 type CompModule<'varTy> = {funcs : (CompSignature<'varTy> * ( Instruct<'varTy> list)) list; lits : (string * string) list}
 type MLModule = CompModule<MixedVar>
 let toML (m : FlattenedModule) = 
   let k = 1
-  let convertFunc (astSig, instructs) = 
-    let (mixedSig, initial) = toMixedSig astSig
-    (mixedSig, initial @ (instructs |> List.collect toMixedInstruct))
   {
     lits = m.lits
-    funcs = m.funcs |> List.map convertFunc
+    funcs = m.funcs |> List.map (uncurry convertFuncToML)
   }
    
 
