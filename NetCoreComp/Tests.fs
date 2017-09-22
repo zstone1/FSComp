@@ -300,6 +300,16 @@ let ``many strings`` () = checkStdOut "a\nb\nc\nd\n" @"
       printf(""d"");
       return 0;
     }"
+
+[<Test>]
+let ``unused vars`` () = checkCode 4 @"
+    public int main(){
+      int a = 1;
+      int b = 2;
+      int c = 3;
+      return 2 + b;
+    }"
+
 [<Test>]
 let ``unused params`` () = checkCode 13 @"
     public int main(){
@@ -323,6 +333,20 @@ let ``args never unified`` () = checkCode 1 @"
         return j;
       }
       return i;
+    }"
+[<Test>]
+let ``args never unified 2`` () = checkCode 2 @"
+    public int main(){
+      return Foo(1,2);
+    }
+
+    public int Foo(int k, int j){
+      if(j)
+      {
+        k = 10;
+        return k;
+      }
+      return j;
     }"
 [<Test>]
 let ``unreferenced param`` () = checkCode 1 @"

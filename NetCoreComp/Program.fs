@@ -13,18 +13,17 @@ open MixedLang
 [<EntryPoint>]
 let main argv =
   try
-    let prgm = @" 
-
-    public int foo(string s, int a, int b, int c, int d, int e, int f, int g, int h){
-      printf(s,a,b,c,d,e,f,g,h);
-      return 0;
-    }
-
-    public int main(){
-      string s = ""Args %i %i %i %i %i %i %i %i"";
-      foo(s,1,2,3,4,5,6,7,8);
-      return 0;
-    }"
+    let prgm = @"  public int main(){
+      int terminate = 0;
+      int i = 10;
+      while (terminate){
+        i = i-1;
+        if(i - 2){
+            terminate = 1;
+        }
+      }
+      return i;
+  }"
     globalSettings <- {allocation = AffineGreedy}
     let p = prgm 
          |> parseProgram 

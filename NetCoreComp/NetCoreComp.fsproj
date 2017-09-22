@@ -16,6 +16,7 @@
     <Compile Include="Flatten.fs"/>
     <Compile Include="MixedLang.fs"/>
     <Compile Include="ComputationGraph.fs"/>
+    <Compile Include="SSAForm.fs"/>
     <Compile Include="Unification.fs"/>
     <Compile Include="AssignHomes.fs"/>
     <Compile Include="InjectMoves.fs"/>

@@ -71,14 +71,12 @@ let makeNamePre prefix : State<string,InterSt> = state {
 let makeVariable = makeNamePre "temp" |>> ILVarName
 
 let handleArith arith flatten x y = state {
-    let! xVar = makeVariable
-    let! xloc = flatten x
-    yield AssignI (xVar, xloc)
-    let! yloc = flatten y
-    yield arith (xVar, yloc)
-    return xVar |> VarAtom}
+  let! xVar = flatten x 
+  let! yVar = flatten y
+  yield arith (xVar, yVar |> VarAtom)
+  return xVar |> VarAtom}
 
-let rec flattenExpression = function
+let getExprValue flatten = function
   | ASTIntLit i -> i |> IntLitAtom |> returnM
   | ASTStringLit str -> state {
       let! name = makeNamePre "str"
@@ -87,47 +85,45 @@ let rec flattenExpression = function
     }
   | ASTVar v -> v.name |> ILVarName |> VarAtom |> returnM
   | ASTFunc ({name = PlusName; argTys = Some [IntTy;IntTy] }, [x;y]) ->
-      handleArith AddI flattenExpression x y
+      handleArith AddI flatten x y
   | ASTFunc ({name = MinusName; argTys = Some [IntTy;IntTy]}, [x;y]) -> 
-      handleArith SubI flattenExpression x y
+      handleArith SubI flatten x y
   | ASTFunc ({name = MultName; argTys = Some [IntTy; IntTy]}, [x;y]) ->
-      handleArith IMulI flattenExpression x y
+      handleArith IMulI flatten x y
   | ASTFunc (s,args) -> state {
-    let! args = mapM flattenExpression args
+    let! args = mapM flatten args 
     let! rtnVar = makeVariable
-    yield CallI (Some rtnVar, LabelName s.name, args)
+    yield CallI (Some rtnVar, LabelName s.name, args |> List.map VarAtom)
     return rtnVar |> VarAtom }
 
-let getGuardVar = 
-  flattenExpression
-  >=> function 
-      | VarAtom v -> v |> returnM
-      | x -> state {
-           let! tempVar = makeVariable
-           yield AssignI (tempVar, x)
-           return tempVar }
+let rec flattenExpression e = state {
+  let! exprVal = getExprValue flattenExpression e
+  let! newVar = makeVariable
+  yield AssignI (newVar, exprVal)
+  return newVar
+}
 
 let rec flattenStatement = function
   | ReturnStat e -> state { 
-      let! flatE = flattenExpression e
+      let! flatE = flattenExpression e |>> VarAtom
       yield ReturnI flatE}
   | Declaration _ -> empty
   | Execution e -> flattenExpression e |>> ignore
-  | Assignment ({name = n},e) -> state {let! flatE = flattenExpression e
+  | Assignment ({name = n},e) -> state {let! flatE = flattenExpression e |>> VarAtom
                                         yield AssignI (ILVarName n, flatE) }
   | IfStat (guard, body) -> state {
-      let! guardVar = getGuardVar guard
       let! skipIf = makeNamePre "if_lab" |>> LabelName
+      let! guardVar = flattenExpression guard
       yield CmpI (guardVar, IntLitAtom 0)
       yield JnzI skipIf
       do! mapU flattenStatement body 
       yield LabelI skipIf
       return () }
   | While (guard, body) -> state {
-      let! guardVar = getGuardVar guard
       let! startLab = makeNamePre "while_start_lab" |>> LabelName
       let! endLab = makeNamePre "while_end_lab" |>> LabelName
       yield LabelI startLab
+      let! guardVar = flattenExpression guard
       yield CmpI (guardVar, IntLitAtom 0)
       yield JnzI endLab
       do! mapU flattenStatement body
