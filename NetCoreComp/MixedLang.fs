@@ -27,8 +27,8 @@ type Register =
 type MixedVar = 
   | MLVarName of string
   | RegVar of Register
-  | StackArg of int
-  | IncomingArg of int
+  | OutgoingStack of int
+  | IncomingStack of int
 
 type MLAtom = Atom<MixedVar>
 type MLInstruct = Instruct<MixedVar>
@@ -49,6 +49,30 @@ let toMLAtom = function
   | VarAtom (ILVarName s) -> VarAtom (MLVarName s)
 let callingConvention = [RDI; RSI; RDX; RCX; R8; R9]
 
+let getRequirements = function 
+  | AddI _ | CmpI _ | SubI _ | IMulI _ 
+  | AssignI _ | JmpI _ | JnzI _ | LabelI _
+  | PrepareCall _ | CompleteCall _ 
+    -> []
+  | ReturnI (v) 
+    -> [(v, RegVar RAX)]
+  | CallI (v,lab, SplitAt 6 (l,r)) -> 
+    [
+      yield! v |> map (fun i -> (i, RegVar RAX)) |> toList
+
+      let regArgs = callingConvention
+                 |> List.take l.Length 
+                 |> List.map (RegVar)
+                 |> (List.zip l) 
+      yield! regArgs
+
+      let stackArgs = r
+                   |> List.indexed 
+                   |> List.map (fst_set OutgoingStack >> swap)
+                   |> List.rev
+      yield! stackArgs
+    ]
+(*
 let toMixedInstruct = function 
   | AddI (a,b) -> [AddI ( toMLVar a, toMLAtom b)]
   | CmpI (a,b) -> [CmpI ( toMLVar a, toMLAtom b)]
@@ -73,7 +97,7 @@ let toMixedInstruct = function
 
       let stackArgs = r
                    |> List.indexed 
-                   |> List.map (fst_set StackArg )
+                   |> List.map (fst_set OutgoingStack )
                    |> List.rev
 
       let allArgs = regArgs @ stackArgs
@@ -99,7 +123,7 @@ let toMixedSig (sgn : ILSignature) =
   let fixedRegs = (callingConvention |> Seq.map (RegVar))
   let regAssigns = argMoves fixedRegs regArgs
 
-  let fixedStack = (Seq.init stackArgs.Length MixedVar.IncomingArg)
+  let fixedStack = (Seq.init stackArgs.Length MixedVar.IncomingStack)
   let stackAssigns = argMoves fixedStack stackArgs
   let newSgn = {
     MixedSignature.name = sgn.name
@@ -108,7 +132,7 @@ let toMixedSig (sgn : ILSignature) =
   }
   (newSgn, regAssigns @ stackAssigns)
 
-
+*)
 type CompModule<'varTy> = {funcs : (CompSignature<'varTy> * ( Instruct<'varTy> list)) list; lits : (string * string) list}
 type MLModule = CompModule<MixedVar>
 let toML (m : FlattenedModule) = 

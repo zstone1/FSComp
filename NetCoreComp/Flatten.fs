@@ -18,8 +18,8 @@ type Instruct<'v> =
   | AssignI of 'v * Atom<'v>
   | JnzI of LabelMarker
   | JmpI of LabelMarker
-  | CallI of 'v option * LabelMarker * Atom<'v> list
-  | ReturnI of Atom<'v>
+  | CallI of 'v option * LabelMarker * 'v list
+  | ReturnI of 'v
   | PrepareCall of int (*regArgs*) * int (*stackArgs*)
   | CompleteCall of int (*regArgs*) * int (*stackArgs*)
   | LabelI of LabelMarker
@@ -40,9 +40,9 @@ let mapInstruct f f' g h = function
   | AssignI (a,b) -> AssignI (f a, g b)
   | JmpI (l) -> JmpI (h l)
   | JnzI (l) -> JnzI (h l)
-  | CallI (v,l,args) -> CallI (f' v, h l, List.map g args)
+  | CallI (v,l,args) -> CallI (f' v, h l, List.map f args)
   | LabelI (l) -> LabelI (h l)
-  | ReturnI (v) -> ReturnI (g v)
+  | ReturnI (v) -> ReturnI (f v)
   | PrepareCall (a,b) -> PrepareCall (a,b)
   | CompleteCall  (a,b) -> CompleteCall (a,b)
 
@@ -91,9 +91,13 @@ let getExprValue flatten = function
   | ASTFunc ({name = MultName; argTys = Some [IntTy; IntTy]}, [x;y]) ->
       handleArith IMulI flatten x y
   | ASTFunc (s,args) -> state {
+    let regArgs = min args.Length 6
+    let stackArgs = max (args.Length - 6) 0
+    yield PrepareCall (regArgs, stackArgs)
     let! args = mapM flatten args 
     let! rtnVar = makeVariable
-    yield CallI (Some rtnVar, LabelName s.name, args |> List.map VarAtom)
+    yield CallI (Some rtnVar, LabelName s.name, args )
+    yield CompleteCall (regArgs, stackArgs)
     return rtnVar |> VarAtom }
 
 let rec flattenExpression e = state {
@@ -105,7 +109,7 @@ let rec flattenExpression e = state {
 
 let rec flattenStatement = function
   | ReturnStat e -> state { 
-      let! flatE = flattenExpression e |>> VarAtom
+      let! flatE = flattenExpression e 
       yield ReturnI flatE}
   | Declaration _ -> empty
   | Execution e -> flattenExpression e |>> ignore
@@ -130,18 +134,30 @@ let rec flattenStatement = function
       yield JmpI startLab
       yield LabelI endLab }
 
-let toILSgn (sgn : ASTSignature) = {
+let toILSgn newArgs (sgn : ASTSignature) = {
   name = sgn.name
   returnTy = sgn.returnTy
-  args = sgn.args |> List.map toVar
+  args = newArgs
+}
+
+let initializeFunc (sgn : ASTSignature) = state {
+  let foo (ILVarName n as v) = state {
+    let! seedVar = makeVariable
+    return (v, seedVar) }
+  
+  let! newArgs = mapM (foo << toVar) sgn.args
+  for (v,temp) in newArgs do yield AssignI (v, temp |> VarAtom)
+
+  return sgn |> toILSgn (newArgs |> List.map snd)
 }
 
     
 let flattenFunc f = state {
   do! updateStateU (fun s -> {s with instructs = []})
+  let! newSgn = f.signature |> initializeFunc
   do! mapU flattenStatement f.body
   let! {instructs = x } = getState
-  return (f.signature |> toILSgn, x)
+  return (newSgn , x)
 }
 
 type FlattenedModule = {funcs : (ILSignature * (ILInstruct list)) list; lits : (string * string) list}

@@ -80,14 +80,14 @@ let private validateColoring (adjNodes) thisColor = state {
 ///Otherwise use @pickAndAssignColor
 let private colorGraph pickAndAssignColor (g: Map<_,_>) = state {
   let sorted = List.sortBy (fst >> function 
-    | RegVar _ | IncomingArg _ | StackArg _ -> 0
+    | RegVar _ | IncomingStack _ | OutgoingStack _ -> 0
     | _ -> 1)
   for (key, adjs) in sorted (g |> Map.toList ) do
     let! newColor = 
       match key with
       | (RegVar r)  -> key |> assignColor (Reg r) 
-      | (IncomingArg i)  -> key |> assignColor (Stack (PreStack i)) 
-      | (StackArg i) ->  key |> assignColor (Stack (PostStack i))
+      | (IncomingStack i)  -> key |> assignColor (Stack (PreStack i)) 
+      | (OutgoingStack i) ->  key |> assignColor (Stack (PostStack i))
       | _ -> pickAndAssignColor key adjs
     //This makes assumptions about the ml being valid,
     //in the sense of two fixed variables won't be in the same 
