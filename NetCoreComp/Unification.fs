@@ -130,14 +130,25 @@ let rec private pruneMlUntilDone lastOne ml =
   then ml 
   else pruneMlUntilDone (List.length ml) (pruneUnusedAssignments ml)
 
-let private colorML args x = 
+let computeAffinity = function 
+  | AssignI (x,y) -> [(VarAtom x, y); (y, VarAtom x)]
+  | _ -> []
+
+let allAffinities ml = 
+  query {
+    for (a,b) in ml |> List.collect computeAffinity do
+    groupValBy b a into g
+    select (g.Key, g |> List.ofSeq) }
+  |> Map.ofSeq
+
+let private colorML coloring args x = 
   let graph = x |> toGraph 
   let traverals = graph |> getTraversals
   let nodes = traverals |> Seq.collect (fun (v, i) -> [for n in i.witnessed do yield (v,n)])
   let x5 = toLivnessGraph nodes
   let x6 = Map.ofSeq x5
   let x7 = Map.map (konst List.ofSeq) x6
-  let x8 =  colorGraphGreedy x7
+  let x8 =  coloring x7
   let x9 =  (exec |> flip <| Map.empty) x8
   x9
 
@@ -151,9 +162,9 @@ let private unifyVars c = mapInstructBasic (replaceVar c)
 
 type UnifiedSignature = CompSignature<Location>
 
-let private unifyVariables (signature : MixedSignature , ml) = 
+let private unifyVariables coloring  (signature : MixedSignature , ml) = 
   let pruned = pruneMlUntilDone -1 ml
-  let coloring= colorML signature.args pruned
+  let coloring= colorML coloring signature.args pruned
   let newIl = pruned |> List.map (unifyVars coloring)
   let newSig = 
     {
@@ -161,15 +172,17 @@ let private unifyVariables (signature : MixedSignature , ml) =
       name = signature.name
       returnTy = signature.returnTy
     }
-
   (newSig, newIl)
 
 
 type UnifiedModule = CompModule<Location>
 let unifyModule (m : MLModule) = 
+  let coloring = match globalSettings.allocation with  
+                 | RegGreedy -> colorGraphGreedy
+                 | _ -> colorGraphGreedy
   {
     UnifiedModule.lits = m.lits
-    UnifiedModule.funcs = List.map unifyVariables m.funcs
+    UnifiedModule.funcs = List.map (unifyVariables coloring) m.funcs
   }
 
  
