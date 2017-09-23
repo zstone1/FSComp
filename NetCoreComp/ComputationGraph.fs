@@ -51,7 +51,6 @@ let private (|Return|StepNext|StepJump|BranchJump|) = function
   | JmpI l  -> StepJump l
   | CmpI _ | AssignI _ | AddI _ | LabelI _ 
   | IMulI _ | SubI _ | CallI _ 
-  | CompleteCall _ | PrepareCall _
       -> StepNext
 
 let private computeEdges prgm f x xs = 
@@ -97,7 +96,6 @@ let getReadVariables = function
        | VarAtom b' -> [a; b']
        | IntLitAtom _ | DataRefAtom _ -> [a]
   | JmpI _ | JnzI _ | LabelI _ | AssignI _ 
-  | CompleteCall _ | PrepareCall _
     -> []
 
 let getWrittenVariables = function 

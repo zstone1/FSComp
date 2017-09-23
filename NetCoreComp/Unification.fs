@@ -21,6 +21,14 @@ type Location =
   | Imm of int
   | Stack of StackLoc 
 
+let private replaceVar' (coloring:Map<_,_>) = function
+  | MLVarName _ as v -> coloring |> Map.tryFind v
+  | (RegVar r) -> Reg r |> Some
+  | (IncomingStack i) -> Stack (PreStack i) |> Some
+  | OutgoingStack -> Stack PostStack |> Some
+
+let private replaceVar (coloring:Map<_,_>) = (replaceVar' coloring) >> Option.get
+
 type LivenessTraversal = {witnessed : (NodeId * NodeId) list; usedAssignments : NodeId List}
 ///Traverses up the computation graph, starting at @n, to determine all of the nodes where @v is alive (assuming it is alive at below or in @n) 
 let rec private trackParents' (v  ) (compGraph : DiGraph<_>) n = state {
@@ -97,20 +105,41 @@ let private colorGraph pickAndAssignColor (g: Map<_,_>) = state {
     do! validateColoring g.[key] newColor
 }
 
-let colors = Seq.append 
-               (List.map Reg [RDI;RSI;RDX;RCX;R8;R9;R15; R14; R13; R12; RBP; RBX; RAX])
-               (Seq.initInfinite (Stack << VarStack) )
+let regColors = (List.map Reg [RDI;RSI;RDX;RCX;R8;R9;R15; R14; R13; R12; RBP; RBX; RAX])
+let stackColors = (Seq.initInfinite (Stack << VarStack) )
+let colors = Seq.append regColors stackColors
+               
+               
 
 let greedyNextColor cs = Seq.find (fun c -> not <| Seq.contains c cs) colors
 
 let private pickAndAssignGreedy key adjs = state {
   let! coloringSoFar = getState
-  let n = Seq.choose (Map.tryFind |> flip <| coloringSoFar) adjs
-  let c = greedyNextColor n
+  let disallowed = adjs |> Seq.choose (Map.tryFind |> flip <| coloringSoFar)
+  let c = greedyNextColor disallowed
   return! assignColor c key
 }
+
+let private pickAndAssignAfineGreedy (afinity:Map<Atom<_>, Atom<_> list>) key adjs  = state {
+  let! coloringSoFar = getState
+  let friends = afinity.[key |> VarAtom] 
+             |> List.collect (fun i -> afinity.[i])
+             |> List.collect (fun i -> afinity.[i])
+             |> List.distinct
+  let afinities = friends
+               |> List.choose (function 
+                  | VarAtom v -> replaceVar' coloringSoFar v
+                  | DataRefAtom _ | IntLitAtom _ -> None)
+
+  let disallowed = adjs |> Seq.choose (Map.tryFind |>flip<| coloringSoFar)
+  match afinities |> List.filter ((Seq.contains |>flip<| disallowed) >> not) with
+  | [] -> return! assignColor (greedyNextColor disallowed) key
+  | x::xs -> return! assignColor x key
+}
   
-let private colorGraphGreedy a = colorGraph pickAndAssignGreedy a
+let private colorGraphGreedy inter afinities = colorGraph pickAndAssignGreedy inter
+
+let private colorGraphAfineGreedy inter affinites = colorGraph (pickAndAssignAfineGreedy affinites) inter
 
 let private pruneUnusedAssignments ml =
   //Note that it's critical that everything here retains order.
@@ -141,22 +170,29 @@ let allAffinities ml =
     select (g.Key, g |> List.ofSeq) }
   |> Map.ofSeq
 
+let callerSave = [RAX; RDI; RSI; RDX; RCX; R8; R9; R10; R11;] 
+let funcCallRestrictions = function 
+  | {instruction = CallI _; next = Step q; id = p} as x 
+    -> callerSave |> List.map (RegVar >> fun i -> (i, (p,q)))
+  | _ -> []
+
 let private colorML coloring args x = 
   let graph = x |> toGraph 
   let traverals = graph |> getTraversals
-  let nodes = traverals |> Seq.collect (fun (v, i) -> [for n in i.witnessed do yield (v,n)])
-  let x5 = toLivnessGraph nodes
-  let x6 = Map.ofSeq x5
-  let x7 = Map.map (konst List.ofSeq) x6
-  let x8 =  coloring x7
+  let usageNodes = traverals |> Seq.collect (fun (v, i) -> [for n in i.witnessed do yield (v,n)])
+  let callingConventionNodes = graph.nodes 
+                            |> mapValues
+                            |> Seq.collect funcCallRestrictions 
+  let nodes = Seq.append usageNodes callingConventionNodes
+  let interferenceGraph = toLivnessGraph nodes
+                       |> Map.ofSeq 
+                       |> Map.map (konst List.ofSeq)
+  let afinityGraph = allAffinities x
+  let x8 =  coloring interferenceGraph afinityGraph
   let x9 =  (exec |> flip <| Map.empty) x8
   x9
 
-let private replaceVar (coloring:Map<_,_>) = function
-  | MLVarName _ as v -> coloring.[v] 
-  | (RegVar r) -> Reg r
-  | (IncomingStack i) -> Stack (PreStack i)
-  | OutgoingStack -> Stack PostStack
+
 
 let private unifyVars c = mapInstructBasic (replaceVar c)
 
@@ -179,6 +215,7 @@ type UnifiedModule = CompModule<Location>
 let unifyModule (m : MLModule) = 
   let coloring = match globalSettings.allocation with  
                  | RegGreedy -> colorGraphGreedy
+                 | AffineGreedy -> colorGraphAfineGreedy
                  | _ -> colorGraphGreedy
   {
     UnifiedModule.lits = m.lits

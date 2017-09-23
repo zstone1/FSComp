@@ -52,7 +52,6 @@ let callingConvention = [RDI; RSI; RDX; RCX; R8; R9]
 let getRequirements = function 
   | AddI _ | CmpI _ | SubI _ | IMulI _ 
   | AssignI _ | JmpI _ | JnzI _ | LabelI _
-  | PrepareCall _ | CompleteCall _ 
     -> []
   | ReturnI (v) 
     -> [(v, RegVar RAX)]

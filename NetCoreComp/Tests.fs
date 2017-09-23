@@ -56,7 +56,7 @@ let checkvalForSettings (f: _ -> 'a) (i:'a) s settings =
 let settingsOpts = [
   {allocation = RegGreedy}
 //  {allocation = StackOnly}
-//  {allocation = AffineGreedy}
+  {allocation = AffineGreedy}
 ]
 
 let checkval (f:_ -> 'a) (i:'a) s = 

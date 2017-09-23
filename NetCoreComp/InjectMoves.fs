@@ -45,8 +45,6 @@ let getSaveRegs used regs =
 
 let calleeSave = [RBP; RBX; R12; R13; R14; R15]
 
-let private callerSave = [RDI; RSI; RDX; RCX; R8; R9; R10; R11;] 
-
 let fromAtom = function 
   | VarAtom v -> v
   | DataRefAtom s -> Data s
@@ -72,23 +70,20 @@ let getMoves usedLocs endLab = function
   | ReturnI v -> [], [JmpA endLab], []
 
   //Ok, this is where it gets weird. We assume the ML puts rtn in RAX correctly
-  //And we put requirements during unification on the register args.
+  //And we put requirements during unification on caller save registers.
   //But the stack args are unhandled. So we must push them in reverse. 
+  //And we must align the stack to a 16 byte index, which means RSP must be odd (call adjusts by 8 bytes always.)
   | CallI (rtn, lab, SplitAt 6 (_,r)) 
-    -> [for v in r |> List.rev do 
-          yield MovLoc (Stack PostStack , v)], 
+    -> [
+        if ((r.Length % 2) = 0) then yield StackAdj -1;
+        for v in r |> List.rev do 
+          yield MovLoc (Stack PostStack , v);
+       ], 
        [CallA lab], 
-       []
-  | PrepareCall (regArgs, stackArgs)
-    -> let requireSaving = callerSave |> List.skip regArgs |> getSaveRegs usedLocs 
-       let offset = if ((requireSaving.Length + stackArgs) % 2) = 0 then [StackAdj -1] else []
-       let saves = requireSaving |> List.map PushA
-       offset, saves, []
-  | CompleteCall (regArgs, stackArgs)
-    -> let requireSaving = callerSave |> List.skip regArgs |> getSaveRegs usedLocs 
-       let offset = if ((requireSaving.Length + stackArgs) % 2) = 0 then [StackAdj 1] else []
-       let saves = requireSaving |> List.map PopA |> List.rev
-       [StackAdj stackArgs], saves, offset
+       [
+         yield StackAdj r.Length;
+         if ((r.Length % 2) = 0) then yield StackAdj 1
+       ];
 
 let toAssignNode endLab usedLocs (c:CompNode<_>) = getMoves usedLocs endLab c.instruction
 

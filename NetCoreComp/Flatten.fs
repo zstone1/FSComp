@@ -20,8 +20,6 @@ type Instruct<'v> =
   | JmpI of LabelMarker
   | CallI of 'v option * LabelMarker * 'v list
   | ReturnI of 'v
-  | PrepareCall of int (*regArgs*) * int (*stackArgs*)
-  | CompleteCall of int (*regArgs*) * int (*stackArgs*)
   | LabelI of LabelMarker
   | AddI of 'v * Atom<'v>
   | SubI of 'v * Atom<'v>
@@ -43,8 +41,6 @@ let mapInstruct f f' g h = function
   | CallI (v,l,args) -> CallI (f' v, h l, List.map f args)
   | LabelI (l) -> LabelI (h l)
   | ReturnI (v) -> ReturnI (f v)
-  | PrepareCall (a,b) -> PrepareCall (a,b)
-  | CompleteCall  (a,b) -> CompleteCall (a,b)
 
 let mapInstructBasic f = 
   let optMap = Option.map f
@@ -103,10 +99,8 @@ let getExprValue flatten = function
     //A subtelty here. the args must be computed before PrepareCall,
     //Otherwise nested function calls produce incorrect stack alignment.
     let! args = mapM flatten args
-    yield PrepareCall (l.Length, r.Length)
     let! rtnVar = makeVariable
     yield CallI (Some rtnVar, LabelName s.name, args )
-    yield CompleteCall (l.Length, r.Length)
     return rtnVar |> VarAtom }
 
 let rec flattenExpression e = state {
