@@ -54,5 +54,10 @@ let propogateAllConstants il =
   let x = newG.Length
   newG
 
+let rec propogateUntilDone' lastTime il = 
+  if lastTime = il
+  then il 
+  else propogateUntilDone' il (propogateAllConstants il)
 
-let propogateConstantsInModule m = {m with funcs = m.funcs |> List.map (snd_set propogateAllConstants)}
+let propogateUntilDone il = propogateUntilDone' [] il
+let propogateConstantsInModule m = {m with funcs = m.funcs |> List.map (snd_set propogateUntilDone)}

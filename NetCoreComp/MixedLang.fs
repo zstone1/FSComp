@@ -49,7 +49,7 @@ let getRequirements = function
   | AssignI _ | JmpI _ | JnzI _ | LabelI _
     -> []
   | CmpI (v,_)
-    -> [(v, RegVar R10)] //a hack to prevent constant propogation from running (cmp (intlit) (intlit)) which is an error
+    -> []
   | ReturnI (v) 
     -> [(v, RegVar RAX)]
   | CallI (v,lab, SplitAt 6 (l,r)) -> 

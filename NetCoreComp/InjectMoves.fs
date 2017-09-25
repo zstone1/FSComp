@@ -100,6 +100,7 @@ let toAssembly = function
   | StackAdj i when i > 0 -> [AddA (Reg RSP, Imm (8 * i))]
   | StackAdj i when i < 0 -> [SubA (Reg RSP, Imm (8 * -i))]
   | StackAdj i -> []
+  | MovLoc (x,y) when x = y -> []
   | MovLoc (Stack PostStack, Reg r) -> [PushA r]
   | MovLoc (Stack PostStack, l) -> [ MovA (Reg R10, l); PushA R10 ]
 
