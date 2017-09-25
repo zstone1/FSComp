@@ -129,7 +129,9 @@ let toGraph l =
   }
  
 
-type LivenessTraversal = {witnessed : (NodeId * NodeId) list; usedAssignments : NodeId List}
+type LivenessTraversal = {
+  witnessed : (NodeId * NodeId) list;
+  usedAssignments : NodeId List;}
 ///Traverses up the computation graph, starting at @n, to determine all of the nodes where @v is alive (assuming it is alive at below or in @n) 
 let rec private trackParents' (v  ) (compGraph : DiGraph<_>) n = state {
   let! s = getState

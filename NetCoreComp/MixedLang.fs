@@ -33,11 +33,6 @@ type MixedVar =
 type MLAtom = Atom<MixedVar>
 type MLInstruct = Instruct<MixedVar>
 
-type CompSignature<'varTy> = {
-  returnTy : Ty
-  name : string
-  args : 'varTy list
-}
 type MixedSignature = CompSignature<MixedVar>
 
 let toMLVar = function
@@ -50,9 +45,11 @@ let toMLAtom vMap= function
 let callingConvention = [RDI; RSI; RDX; RCX; R8; R9]
 
 let getRequirements = function 
-  | AddI _ | CmpI _ | SubI _ | IMulI _ 
+  | AddI _  | SubI _ | IMulI _ 
   | AssignI _ | JmpI _ | JnzI _ | LabelI _
     -> []
+  | CmpI (v,_)
+    -> [(v, RegVar R10)] //a hack to prevent constant propogation from running (cmp (intlit) (intlit)) which is an error
   | ReturnI (v) 
     -> [(v, RegVar RAX)]
   | CallI (v,lab, SplitAt 6 (l,r)) -> 
@@ -89,7 +86,6 @@ let convertFuncToML sgn il =
   (newSgn, newBody)
              
 
-type CompModule<'varTy> = {funcs : (CompSignature<'varTy> * ( Instruct<'varTy> list)) list; lits : (string * string) list}
 type MLModule = CompModule<MixedVar>
 let toML (m : FlattenedModule) = 
   let k = 1

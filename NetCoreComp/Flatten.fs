@@ -51,17 +51,29 @@ let mapInstructBasic f =
   let labelMap = id
   mapInstruct f optMap atomMap labelMap
 
+let getExposedVar = function 
+    | AddI (v,_) | SubI (v,_) | IMulI (v,_) 
+    | CmpI (v,_) | AssignI (v,_)  
+    | CallI(Some v,_, _) | ReturnI v 
+      -> v |> Some
+    | JnzI _ | JmpI _ | CallI (None, _, _) 
+    | LabelI _
+      -> None
+
 type InterSt = {
   uniqueNum : int
   instructs : ILInstruct list
   stringLits : (string * string) list
 }
 
-type ILSignature = {
-  name : string
-  args : ILVariable list
+type CompSignature<'varTy> = {
   returnTy : Ty
+  name : string
+  args : 'varTy list
 }
+
+type ILSignature = CompSignature<ILVariable>
+
 
 type StateBuilder with 
   member x.Yield(i) = updateStateU (fun s -> {s with InterSt.instructs = s.instructs @ [i]})
@@ -163,7 +175,8 @@ let flattenFunc f = state {
   return (newSgn , x)
 }
 
-type FlattenedModule = {funcs : (ILSignature * (ILInstruct list)) list; lits : (string * string) list}
+type CompModule<'varTy> = {funcs : (CompSignature<'varTy> * ( Instruct<'varTy> list)) list; lits : (string * string) list}
+type FlattenedModule = CompModule<ILVariable> 
 let flattenModule fs (scope:Scope) = 
   let seed = { uniqueNum = scope.uniqueNum; instructs = []; stringLits = [] }
   fs 

@@ -11,6 +11,7 @@ open InjectMoves
 open MixedLang
 open PeepHole
 open PruneDeadCode
+open ConstantProp
 
 let testOutputDir = "/home/zach/cmp/TestOutput/"
 let runProc dir f args = 
@@ -30,9 +31,10 @@ let executeInDir testDir prgm=
        |> parseProgram 
        |> convertModule
       ||> flattenModule
-       |> toML
        |> pruneDeadBranches
+       |> toML
        |> unifyModule
+      // |> propogateConstantsInModule
        |> assignMovesToModules
        |> peepHoleOptimize
        |> serializeModule

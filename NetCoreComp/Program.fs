@@ -13,14 +13,14 @@ open MixedLang
 [<EntryPoint>]
 let main argv =
   try
-    let prgm = @"
-    public int do(int i){
-      printf(""%i"",i);
-      return i;
-    }
-    public int main(){
-      return do(1) + do(do(2) + do(4)) + do(9);
-    }"
+    let prgm = @" 
+  public int main(){
+    int y = 2 + other();
+    return y;
+  }
+  public int other() {
+    return 5;
+  } " 
     globalSettings <- {allocation = AffineGreedy}
     let p = prgm 
          |> parseProgram 

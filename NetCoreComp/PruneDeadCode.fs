@@ -14,7 +14,7 @@ let private pruneUnusedAssignments ml =
   let traverals = graph |> getTraversals
   let usedIds = traverals |> Seq.collect (fun (_,i) -> i.usedAssignments)
   let isUsed nodeId = function  
-    | {instruction = AssignI (MLVarName _, _)} -> usedIds |> Seq.contains nodeId 
+    | {instruction = AssignI (ILVarName _, _)} -> usedIds |> Seq.contains nodeId 
     | _ -> true
   let pruned = graph.nodes 
             |> Map.filter isUsed 
@@ -26,9 +26,9 @@ let rec private pruneMlUntilDone' lastOne ml =
   then ml 
   else pruneMlUntilDone' (List.length ml) (pruneUnusedAssignments ml)
 
-let private pruneMlUntilDone x = pruneMlUntilDone' -1 x
+let pruneMlUntilDone x = pruneMlUntilDone' -1 x
 
-let pruneDeadBranches (m:MLModule) = {
+let pruneDeadBranches m = {
     lits = m.lits
     funcs = m.funcs |>List.map (snd_set pruneMlUntilDone)
 }

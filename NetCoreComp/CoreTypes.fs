@@ -18,6 +18,10 @@ let mutable globalSettings = {
 let public failComp s = raise (CompilerError s)
 let public failf a = Printf.kprintf failComp a
 
+let tryExactlyOne = function 
+  | [x] -> x |> Some
+  | _ -> None
+
 let (|SplitAt|) i = function 
   | xs when List.length xs < i -> (xs,[])
   | xs -> (List.take i xs, List.skip i xs)

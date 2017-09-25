@@ -150,7 +150,7 @@ let private unifyVars c = mapInstructBasic (replaceVar c)
 
 type UnifiedSignature = CompSignature<Location>
 
-let private unifyVariables colorAlgo (signature, ml) = 
+let private unifyVariables colorAlgo (signature: CompSignature<_>, ml) = 
   let coloring= colorML colorAlgo ml
   let newIl = ml |> List.map (unifyVars coloring)
   let newSig = 
