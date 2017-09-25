@@ -54,7 +54,7 @@ let getRequirements = function
     -> [(v, RegVar RAX)]
   | CallI (v,lab, SplitAt 6 (l,r)) -> 
     [
-      yield! v |> map (fun i -> (i, RegVar RAX)) |> toList
+      yield (v, RegVar RAX)
 
       yield! callingConvention
           |> List.take l.Length 

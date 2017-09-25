@@ -99,7 +99,8 @@ let getReadVariables = function
     -> []
 
 let getWrittenVariables = function 
-  | AssignI (x,_) | CallI (Some x,_,_) -> Some x
+  | AssignI (x,_) | CallI (x,_,_) -> Some x
+  | AddI(v,_) | SubI (v,_) | IMulI (v,_) -> Some v
   | _ -> None
 
  
@@ -141,7 +142,7 @@ let rec private trackParents' (v  ) (compGraph : DiGraph<_>) n = state {
   let writtenVars = compGraph.nodes.[n].instruction |> getWrittenVariables
 
   match writtenVars with
-  | Some v' when v' = v 
+  | Some v' when v' = v  && s.witnessed.Length > 0
     -> do! (fun st -> { st with usedAssignments = n :: s.usedAssignments}) |> updateStateU
   | Some _ | None 
     -> do! (fun st -> { st with witnessed = parentEdges @ st.witnessed}) |> updateStateU

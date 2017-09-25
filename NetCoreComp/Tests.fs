@@ -31,10 +31,10 @@ let executeInDir testDir prgm=
        |> parseProgram 
        |> convertModule
       ||> flattenModule
+       |> propogateConstantsInModule
        |> pruneDeadBranches
        |> toML
        |> unifyModule
-      // |> propogateConstantsInModule
        |> assignMovesToModules
        |> peepHoleOptimize
        |> serializeModule

@@ -18,7 +18,7 @@ type Instruct<'v> =
   | AssignI of 'v * Atom<'v>
   | JnzI of LabelMarker
   | JmpI of LabelMarker
-  | CallI of 'v option * LabelMarker * 'v list
+  | CallI of 'v * LabelMarker * 'v list
   | ReturnI of 'v
   | LabelI of LabelMarker
   | AddI of 'v * Atom<'v>
@@ -30,7 +30,7 @@ type ILVariable = ILVarName of string
 type ILAtom = Atom<ILVariable>
 type ILInstruct = Instruct<ILVariable>
 
-let mapInstruct f f' g h = function 
+let mapInstruct f g h = function 
   | AddI (a,b) -> AddI (f a, g b)
   | CmpI (a,b) -> CmpI (f a, g b)
   | SubI (a,b) -> SubI (f a, g b)
@@ -38,27 +38,17 @@ let mapInstruct f f' g h = function
   | AssignI (a,b) -> AssignI (f a, g b)
   | JmpI (l) -> JmpI (h l)
   | JnzI (l) -> JnzI (h l)
-  | CallI (v,l,args) -> CallI (f' v, h l, List.map f args)
+  | CallI (v,l,args) -> CallI (f v, h l, List.map f args)
   | LabelI (l) -> LabelI (h l)
   | ReturnI (v) -> ReturnI (f v)
 
 let mapInstructBasic f = 
-  let optMap = Option.map f
   let atomMap = function 
     | VarAtom v -> VarAtom (f v)
     | DataRefAtom d -> DataRefAtom d
     | IntLitAtom i -> IntLitAtom i
   let labelMap = id
-  mapInstruct f optMap atomMap labelMap
-
-let getExposedVar = function 
-    | AddI (v,_) | SubI (v,_) | IMulI (v,_) 
-    | CmpI (v,_) | AssignI (v,_)  
-    | CallI(Some v,_, _) | ReturnI v 
-      -> v |> Some
-    | JnzI _ | JmpI _ | CallI (None, _, _) 
-    | LabelI _
-      -> None
+  mapInstruct f atomMap labelMap
 
 type InterSt = {
   uniqueNum : int
@@ -112,7 +102,7 @@ let getExprValue flatten = function
     //Otherwise nested function calls produce incorrect stack alignment.
     let! args = mapM flatten args
     let! rtnVar = makeVariable
-    yield CallI (Some rtnVar, LabelName s.name, args )
+    yield CallI (rtnVar, LabelName s.name, args )
     return rtnVar |> VarAtom }
 
 let rec flattenExpression e = state {
