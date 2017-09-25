@@ -63,7 +63,7 @@ let private getTraversals compGraph = query {
 ///Given the list of variable -> live node pairs,
 ///builds joins against itself to produce the 
 ///adjacency map of the liveness graph.
-let private toLivnessGraph (s:seq<_>) = query {
+let private toInterferenceGraph (s:seq<_>) = query {
   for (v1, n1) in s do
   join (v2, n2) in s on (n1 = n2)
   select (v1, v2) 
@@ -109,8 +109,6 @@ let regColors = (List.map Reg [RDI;RSI;RDX;RCX;R8;R9;R15; R14; R13; R12; RBP; RB
 let stackColors = (Seq.initInfinite (Stack << VarStack) )
 let colors = Seq.append regColors stackColors
                
-               
-
 let greedyNextColor cs = Seq.find (fun c -> not <| Seq.contains c cs) colors
 
 let private pickAndAssignGreedy key adjs = state {
@@ -154,10 +152,12 @@ let private pruneUnusedAssignments ml =
             |> Map.map (fun k v -> v.instruction)
   pruned |> mapValues
 
-let rec private pruneMlUntilDone lastOne ml = 
+let rec private pruneMlUntilDone' lastOne ml = 
   if lastOne = List.length ml
   then ml 
-  else pruneMlUntilDone (List.length ml) (pruneUnusedAssignments ml)
+  else pruneMlUntilDone' (List.length ml) (pruneUnusedAssignments ml)
+
+let private pruneMlUntilDone x = pruneMlUntilDone' -1 x
 
 let computeAffinity = function 
   | AssignI (x,y) -> [(VarAtom x, y); (y, VarAtom x)]
@@ -171,36 +171,37 @@ let allAffinities ml =
   |> Map.ofSeq
 
 let callerSave = [RAX; RDI; RSI; RDX; RCX; R8; R9; R10; R11;] 
-let funcCallRestrictions = function 
-  | {instruction = CallI _; next = Step q; id = p} as x 
-    -> callerSave |> List.map (RegVar >> fun i -> (i, (p,q)))
-  | _ -> []
 
-let private colorML coloring args x = 
-  let graph = x |> toGraph 
-  let traverals = graph |> getTraversals
-  let usageNodes = traverals |> Seq.collect (fun (v, i) -> [for n in i.witnessed do yield (v,n)])
-  let callingConventionNodes = graph.nodes 
-                            |> mapValues
-                            |> Seq.collect funcCallRestrictions 
-  let nodes = Seq.append usageNodes callingConventionNodes
-  let interferenceGraph = toLivnessGraph nodes
-                       |> Map.ofSeq 
-                       |> Map.map (konst List.ofSeq)
-  let afinityGraph = allAffinities x
-  let x8 =  coloring interferenceGraph afinityGraph
-  let x9 =  (exec |> flip <| Map.empty) x8
-  x9
+let getInterferenceMap ml = seq {
+  let graph = ml |> toGraph
 
+  for (v, trav) in graph |> getTraversals do
+    for edge in trav.witnessed do 
+      yield (v, edge)
+  
+  for x in graph.nodes do
+    match x.Value with
+    | {instruction = CallI _; next = Step q; id = p} 
+      -> yield! callerSave |> Seq.map (RegVar >> fun i -> (i, (p,q)))
+    | _ -> yield! []
+}
 
+let private colorML coloring x = 
+  let interference = x 
+                  |> getInterferenceMap 
+                  |> toInterferenceGraph
+                  |> Seq.map (snd_set List.ofSeq)
+                  |> Map.ofSeq
+  let afinity = allAffinities x
+  coloring interference afinity |>exec<| Map.empty
 
 let private unifyVars c = mapInstructBasic (replaceVar c)
 
 type UnifiedSignature = CompSignature<Location>
 
-let private unifyVariables coloring  (signature : MixedSignature , ml) = 
-  let pruned = pruneMlUntilDone -1 ml
-  let coloring= colorML coloring signature.args pruned
+let private unifyVariables colorAlgo (signature : MixedSignature , ml) = 
+  let pruned = pruneMlUntilDone ml
+  let coloring= colorML colorAlgo pruned
   let newIl = pruned |> List.map (unifyVars coloring)
   let newSig = 
     {
@@ -209,7 +210,6 @@ let private unifyVariables coloring  (signature : MixedSignature , ml) =
       returnTy = signature.returnTy
     }
   (newSig, newIl)
-
 
 type UnifiedModule = CompModule<Location>
 let unifyModule (m : MLModule) = 

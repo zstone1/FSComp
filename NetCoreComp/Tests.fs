@@ -197,7 +197,6 @@ let ``call no args 2`` () = checkCode 7 @"
     return 5;
   } " 
 
-
 [<Test>]
 let ``call one arg`` () = checkCode 7 @"
   public int main(){
