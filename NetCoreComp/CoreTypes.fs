@@ -15,7 +15,6 @@ let mutable globalSettings = {
   allocation = StackOnly
 }
 
-
 let public failComp s = raise (CompilerError s)
 let public failf a = Printf.kprintf failComp a
 

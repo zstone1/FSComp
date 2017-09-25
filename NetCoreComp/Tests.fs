@@ -9,6 +9,8 @@ open Unification
 open Swensen.Unquote
 open InjectMoves
 open MixedLang
+open PeepHole
+open PruneDeadCode
 
 let testOutputDir = "/home/zach/cmp/TestOutput/"
 let runProc dir f args = 
@@ -29,8 +31,10 @@ let executeInDir testDir prgm=
        |> convertModule
       ||> flattenModule
        |> toML
+       |> pruneDeadBranches
        |> unifyModule
        |> assignMovesToModules
+       |> peepHoleOptimize
        |> serializeModule
   let dir = "/home/zach/cmp/TestOutput/" + testDir
   do System.IO.Directory.CreateDirectory(dir) |> ignore
@@ -55,7 +59,7 @@ let checkvalForSettings (f: _ -> 'a) (i:'a) s settings =
 
 let settingsOpts = [
   {allocation = RegGreedy}
-//  {allocation = StackOnly}
+  {allocation = StackOnly}
   {allocation = AffineGreedy}
 ]
 
@@ -227,6 +231,23 @@ let ``call one arg three deep`` () = checkCode 23 @"
     return x;
   }
   "
+[<Test>]
+let ``call no args three deep`` () = checkCode 3 @"
+  public int main(){
+    foo();
+    return 3;
+  }
+
+  public int foo(){
+    bar();
+    return 2;
+  }
+  
+  public int bar(){
+    return 1;
+  }
+  "
+
 [<Test>]
 let ``call with 6 args`` () = checkCode 21 @"
     public int main(){

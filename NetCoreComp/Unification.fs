@@ -29,37 +29,6 @@ let private replaceVar' (coloring:Map<_,_>) = function
 
 let private replaceVar (coloring:Map<_,_>) = (replaceVar' coloring) >> Option.get
 
-type LivenessTraversal = {witnessed : (NodeId * NodeId) list; usedAssignments : NodeId List}
-///Traverses up the computation graph, starting at @n, to determine all of the nodes where @v is alive (assuming it is alive at below or in @n) 
-let rec private trackParents' (v  ) (compGraph : DiGraph<_>) n = state {
-  let! s = getState
-  let completedLoop = List.contains n (s.witnessed |> List.map snd)
-  let parents = compGraph.adj.[n].ins
-  let parentEdges = parents  |> List.map (fun i -> (i,n))
-  let writtenVars = compGraph.nodes.[n].instruction |> getWrittenVariables
-
-  match writtenVars with
-  | Some v' when v' = v 
-    -> do! (fun st -> { st with usedAssignments = n :: s.usedAssignments}) |> updateStateU
-  | Some _ | None 
-    -> do! (fun st -> { st with witnessed = parentEdges @ st.witnessed}) |> updateStateU
-       if completedLoop
-         then return ()
-         else do! mapU (trackParents' v compGraph) parents
-}        
-
-let private trackParents v compGraph n = exec (trackParents' v compGraph n) {witnessed = []; usedAssignments = []}
-
-///Returns a pair of Variable->int for every node where 
-///the variable is live.
-let private getTraversals compGraph = query {
-  for (k,c) in Map.toSeq compGraph.nodes do
-  //TODO: optimize away writes to variables that are never read from.
-  for var in getReadVariables c.instruction do
-  let result = trackParents var compGraph k 
-  select (var, result)
-}
-
 ///Given the list of variable -> live node pairs,
 ///builds joins against itself to produce the 
 ///adjacency map of the liveness graph.
@@ -109,12 +78,12 @@ let regColors = (List.map Reg [RDI;RSI;RDX;RCX;R8;R9;R15; R14; R13; R12; RBP; RB
 let stackColors = (Seq.initInfinite (Stack << VarStack) )
 let colors = Seq.append regColors stackColors
                
-let greedyNextColor cs = Seq.find (fun c -> not <| Seq.contains c cs) colors
+let greedyNextColor cs = Seq.find (fun c -> not <| Seq.contains c cs)
 
-let private pickAndAssignGreedy key adjs = state {
+let private pickAndAssignGreedy colorSet key adjs = state {
   let! coloringSoFar = getState
   let disallowed = adjs |> Seq.choose (Map.tryFind |> flip <| coloringSoFar)
-  let c = greedyNextColor disallowed
+  let c = greedyNextColor disallowed colorSet
   return! assignColor c key
 }
 
@@ -131,33 +100,15 @@ let private pickAndAssignAfineGreedy (afinity:Map<Atom<_>, Atom<_> list>) key ad
 
   let disallowed = adjs |> Seq.choose (Map.tryFind |>flip<| coloringSoFar)
   match afinities |> List.filter ((Seq.contains |>flip<| disallowed) >> not) with
-  | [] -> return! assignColor (greedyNextColor disallowed) key
+  | [] -> return! assignColor (greedyNextColor disallowed colors) key
   | x::xs -> return! assignColor x key
 }
   
-let private colorGraphGreedy inter afinities = colorGraph pickAndAssignGreedy inter
+let private colorGraphGreedy inter afinities = colorGraph (pickAndAssignGreedy colors) inter
+
+let private colorGraphStackOnly inter afinities = colorGraph (pickAndAssignGreedy stackColors) inter
 
 let private colorGraphAfineGreedy inter affinites = colorGraph (pickAndAssignAfineGreedy affinites) inter
-
-let private pruneUnusedAssignments ml =
-  //Note that it's critical that everything here retains order.
-  let graph = ml |> toGraph
-  let traverals = graph |> getTraversals
-  let usedIds = traverals |> Seq.collect (fun (_,i) -> i.usedAssignments)
-  let isUsed nodeId = function  
-    | {instruction = AssignI (MLVarName _, _)} -> usedIds |> Seq.contains nodeId 
-    | _ -> true
-  let pruned = graph.nodes 
-            |> Map.filter isUsed 
-            |> Map.map (fun k v -> v.instruction)
-  pruned |> mapValues
-
-let rec private pruneMlUntilDone' lastOne ml = 
-  if lastOne = List.length ml
-  then ml 
-  else pruneMlUntilDone' (List.length ml) (pruneUnusedAssignments ml)
-
-let private pruneMlUntilDone x = pruneMlUntilDone' -1 x
 
 let computeAffinity = function 
   | AssignI (x,y) -> [(VarAtom x, y); (y, VarAtom x)]
@@ -199,10 +150,9 @@ let private unifyVars c = mapInstructBasic (replaceVar c)
 
 type UnifiedSignature = CompSignature<Location>
 
-let private unifyVariables colorAlgo (signature : MixedSignature , ml) = 
-  let pruned = pruneMlUntilDone ml
-  let coloring= colorML colorAlgo pruned
-  let newIl = pruned |> List.map (unifyVars coloring)
+let private unifyVariables colorAlgo (signature, ml) = 
+  let coloring= colorML colorAlgo ml
+  let newIl = ml |> List.map (unifyVars coloring)
   let newSig = 
     {
       UnifiedSignature.args = List.map (replaceVar coloring) signature.args
@@ -216,10 +166,10 @@ let unifyModule (m : MLModule) =
   let coloring = match globalSettings.allocation with  
                  | RegGreedy -> colorGraphGreedy
                  | AffineGreedy -> colorGraphAfineGreedy
-                 | _ -> colorGraphGreedy
+                 | StackOnly -> colorGraphStackOnly
   {
     UnifiedModule.lits = m.lits
-    UnifiedModule.funcs = List.map (unifyVariables coloring) m.funcs
+    UnifiedModule.funcs = m.funcs |> List.map (unifyVariables coloring) 
   }
 
  

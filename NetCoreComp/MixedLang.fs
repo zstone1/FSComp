@@ -63,11 +63,6 @@ let getRequirements = function
           |> List.take l.Length 
           |> List.map (RegVar)
           |> (List.zip l) 
-
-//      yield! r
-//          |> List.indexed 
-//          |> List.map (fst_set OutgoingStack >> swap)
-//          |> List.rev
     ]
 
 let incomingArgRequirements (SplitAt 6 (regArgs, stackArgs)) = [
