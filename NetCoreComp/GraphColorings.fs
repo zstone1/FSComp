@@ -73,11 +73,36 @@ let private pickAndAssignAfineGreedy (afinity:Map<Atom<_>, Atom<_> list>) key ad
                   | DataRefAtom _ | IntLitAtom _ -> None)
 
   let disallowed = adjs |> Seq.choose (Map.tryFind |>flip<| coloringSoFar)
-  match afinities |> List.filter ((Seq.contains |>flip<| disallowed) >> not) with
+  let candidateFriends = [
+    for i in afinities do 
+      if disallowed |> Seq.contains i |> not
+      then yield i
+  ]
+  match candidateFriends with
   | [] -> return! assignColor (greedyNextColor disallowed colors) key
   | x::xs -> return! assignColor x key
 }
-  
+let private pickAndAssignAffineBrute (afinity:Map<Atom<_>, Atom<_> list>) key adjs  = state {
+  let! coloringSoFar = getState
+  let friends = afinity.[key |> VarAtom] 
+             |> List.collect (fun i -> afinity.[i])
+             |> List.collect (fun i -> afinity.[i])
+             |> List.distinct
+  let afinities = friends
+               |> List.choose (function 
+                  | VarAtom v -> replaceVar' coloringSoFar v
+                  | DataRefAtom _ | IntLitAtom _ -> None)
+
+  let disallowed = adjs |> Seq.choose (Map.tryFind |>flip<| coloringSoFar)
+  let candidateFriends = [
+    for i in afinities do 
+      if disallowed |> Seq.contains i |> not
+      then yield i
+  ]
+  match candidateFriends with
+  | [] -> return! assignColor (greedyNextColor disallowed colors) key
+  | x::xs -> return! assignColor x key
+}
 let colorGraphGreedy inter afinities = colorGraph (pickAndAssignGreedy colors) inter
 
 let colorGraphStackOnly inter afinities = colorGraph (pickAndAssignGreedy stackColors) inter
