@@ -190,7 +190,7 @@ let getFuncsInModule (fs :ParserFunction list) =
   }
   List.map getRef fs
 
-let public convertModule fs = 
+let public convertToAST fs = 
   let signatures = getFuncsInModule fs
   let scopeInit = {
     uniqueNum = 0

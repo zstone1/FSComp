@@ -13,12 +13,11 @@ open InjectMoves
 
 let cullNoOps = function 
   | MovA (p,q) when p = q -> None
-  | SubA (_, Imm 0) | AddA (_, Imm 0) -> None
-  | Assembly.Nop -> None
+  | SubA (_, Imm 0) | AddA (_, Imm 0) | IMulA (_,Imm 1) -> None
+  | Nop -> None
   | x -> Some x
 
 let peepHoleOptimizeFunc asm = List.choose cullNoOps asm
-  
 
 let peepHoleOptimize (m : AsmModule) = {
     lits = m.lits

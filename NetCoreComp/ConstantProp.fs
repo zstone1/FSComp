@@ -60,4 +60,4 @@ let rec propogateUntilDone' lastTime il =
   else propogateUntilDone' il (propogateAllConstants il)
 
 let propogateUntilDone il = propogateUntilDone' [] il
-let propogateConstantsInModule m = {m with funcs = m.funcs |> List.map (snd_set propogateUntilDone)}
+let propogateConstants m = {m with funcs = m.funcs |> List.map (snd_set propogateUntilDone)}

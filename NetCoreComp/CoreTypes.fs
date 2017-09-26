@@ -11,9 +11,6 @@ type RegAlloctionType = StackOnly | RegGreedy | AffineGreedy
 type Settings = {
   allocation : RegAlloctionType
 }
-let mutable globalSettings = {
-  allocation = StackOnly
-}
 
 let public failComp s = raise (CompilerError s)
 let public failf a = Printf.kprintf failComp a

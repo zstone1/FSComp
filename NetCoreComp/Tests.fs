@@ -12,50 +12,15 @@ open MixedLang
 open PeepHole
 open PruneDeadCode
 open ConstantProp
+open Orchestration
 
-let testOutputDir = "/home/zach/cmp/TestOutput/"
-let runProc dir f args = 
-  let proc = new System.Diagnostics.Process()
-  proc.StartInfo.FileName <- f
-  proc.StartInfo.Arguments <- args
-  proc.StartInfo.UseShellExecute <- true
-  proc.StartInfo.WorkingDirectory <- "/home/zach/cmp/TestOutput/" + dir
-  do proc.Start() |> ignore
-  do proc.WaitForExit()
-  proc
 
-let mutable i = 0
-let executeInDir testDir prgm= 
-  let proc = runProc testDir
-  let p = prgm 
-       |> parseProgram 
-       |> convertModule
-      ||> flattenModule
-       |> propogateConstantsInModule
-       |> pruneDeadBranches
-       |> toML
-       |> unifyModule
-       |> assignMovesToModules
-       |> peepHoleOptimize
-       |> serializeModule
-  let dir = "/home/zach/cmp/TestOutput/" + testDir
-  do System.IO.Directory.CreateDirectory(dir) |> ignore
-  do System.IO.File.WriteAllText(testOutputDir + testDir + "/test1.asm", p)
-  use assemble = proc "nasm" " -felf64 \"test1.asm\" -o \"Foo.o\""
-  use link = proc "gcc" "Foo.o -o Foo.out "
-  use result = proc "./Foo.out > result.txt" ""
-  let text = System.IO.File.ReadAllText(dir + "/result.txt")
-  (result.ExitCode, text)
-
-let execute s =
-  do i <- i+1
-  executeInDir (TestContext.CurrentContext.Test.Name + "_" + i.ToString()) s
+let execute setting s =
+  executeInDir setting (sprintf "%s_%A" TestContext.CurrentContext.Test.Name setting.allocation) s
              
-
 let checkvalForSettings (f: _ -> 'a) (i:'a) s settings = 
   try 
-    globalSettings <- settings
-    Assert.AreEqual(i, s |> execute |> f, sprintf "%A" settings)
+    Assert.AreEqual(i, s |> execute settings |> f, sprintf "%A" settings)
   with 
     | CompilerError e -> Assert.Fail(sprintf " Settings %A: Compilation failed: %s " settings e)
 

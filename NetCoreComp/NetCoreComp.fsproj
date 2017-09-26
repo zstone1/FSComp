@@ -25,6 +25,7 @@
     <Compile Include="InjectMoves.fs"/>
     <Compile Include="PeepHole.fs"/>
     <Compile Include="Assembly.fs"/>
+    <Compile Include="Orchestration.fs"/>
     <Compile Include="Tests.fs"/>
     <Compile Include="Program.fs"/>
   </ItemGroup>

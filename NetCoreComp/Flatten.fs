@@ -167,7 +167,7 @@ let flattenFunc f = state {
 
 type CompModule<'varTy> = {funcs : (CompSignature<'varTy> * ( Instruct<'varTy> list)) list; lits : (string * string) list}
 type FlattenedModule = CompModule<ILVariable> 
-let flattenModule fs (scope:Scope) = 
+let flattenToIL fs (scope:Scope) = 
   let seed = { uniqueNum = scope.uniqueNum; instructs = []; stringLits = [] }
   fs 
   |> mapM flattenFunc

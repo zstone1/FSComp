@@ -8,6 +8,7 @@ open Assembly
 open Unification
 open InjectMoves
 open MixedLang
+open Orchestration
 
 
 [<EntryPoint>]
@@ -22,23 +23,7 @@ let main argv =
       k = 10;
       return i + j + k;
     }"
-    globalSettings <- {allocation = AffineGreedy}
-//    let p = prgm 
-//         |> parseProgram 
-//         |> convertModule
-//        ||> flattenModule
-//         |> (fun i -> printfn "%A" i; i)
-//         |> toML
-////         |> (fun i -> printfn "%A" i; i)
-//         |> unifyModule
-////         |> (fun i -> printfn "%A" i; i)
-//         |> assignMovesToModules
-//         |> (fun i -> printfn "%A" i; i)
-//         |> serializeModule
-//         |> (fun i -> i.funcInstructions.Head |> snd)
-//    do p.ainstructs |> List.iter (printfn "%A")
-//    1
-    let (exit,stdout) = EndToEnd.executeInDir "manualTest" prgm
+    let (exit,stdout) = executeInDir {allocation = AffineGreedy} "manualTest" prgm
     do printfn "std: %s" stdout
     do printfn "code: %i" exit
     1

@@ -155,7 +155,7 @@ let assignMovesFunc (sgn, ml) =
              @ [RetA]
   init @ body @ finish
       
-let assignMovesToModules (x:UnifiedModule) = 
+let convertToAssembly (x:UnifiedModule) = 
   {
     funcs = List.map assignMovesFunc x.funcs
     lits = x.lits

@@ -150,7 +150,7 @@ let private unifyVars c = mapInstructBasic (replaceVar c)
 
 type UnifiedSignature = CompSignature<Location>
 
-let private unifyVariables colorAlgo (signature: CompSignature<_>, ml) = 
+let private unifyVariablesInFunc colorAlgo (signature: CompSignature<_>, ml) = 
   let coloring= colorML colorAlgo ml
   let newIl = ml |> List.map (unifyVars coloring)
   let newSig = 
@@ -162,14 +162,14 @@ let private unifyVariables colorAlgo (signature: CompSignature<_>, ml) =
   (newSig, newIl)
 
 type UnifiedModule = CompModule<Location>
-let unifyModule (m : MLModule) = 
-  let coloring = match globalSettings.allocation with  
+let unifyVariables allocType (m : MLModule) = 
+  let coloring = match allocType with  
                  | RegGreedy -> colorGraphGreedy
                  | AffineGreedy -> colorGraphAfineGreedy
                  | StackOnly -> colorGraphStackOnly
   {
     UnifiedModule.lits = m.lits
-    UnifiedModule.funcs = m.funcs |> List.map (unifyVariables coloring) 
+    UnifiedModule.funcs = m.funcs |> List.map (unifyVariablesInFunc coloring) 
   }
 
  
