@@ -35,6 +35,16 @@ type MLInstruct = Instruct<MixedVar>
 
 type MixedSignature = CompSignature<MixedVar>
 
+type StackLoc = 
+  | PreStack of int
+  | VarStack of int
+  | PostStack //PostStack sucks, and is handled by carefully keeping track of the order of operations.
+
+type Location = 
+  | Reg of Register
+  | Data of string
+  | Imm of int
+  | Stack of StackLoc 
 let toMLVar = function
   | ILVarName s -> MLVarName s
 

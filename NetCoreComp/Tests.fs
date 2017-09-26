@@ -25,9 +25,9 @@ let checkvalForSettings (f: _ -> 'a) (i:'a) s settings =
     | CompilerError e -> Assert.Fail(sprintf " Settings %A: Compilation failed: %s " settings e)
 
 let settingsOpts = [
-  {allocation = RegGreedy}
-  {allocation = StackOnly}
-  {allocation = AffineGreedy}
+  for al in [AffineGreedy] do
+    for opt in [true] do
+      yield {allocation = al; optimization = opt;}
 ]
 
 let checkval (f:_ -> 'a) (i:'a) s = 
@@ -360,3 +360,14 @@ let ``swapparams`` () = checkCode 4 @"
       return i - j;
     }
     "
+[<Test>]
+let ``unused add`` () = checkCode 4 @"
+    public int main(){
+      int y = foo() + 2;
+      return 4;
+    }
+
+    public int foo(){
+      return 10;
+    }
+"

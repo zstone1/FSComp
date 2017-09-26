@@ -16,14 +16,13 @@ let main argv =
   try
     let prgm = @"
     public int main(){
-      return Foo(1,2,3);
+      return foo() + 2;
     }
-
-    public int Foo(int i, int j, int k){
-      k = 10;
-      return i + j + k;
+    public int foo(){
+      return 5;
     }"
-    let (exit,stdout) = executeInDir {allocation = AffineGreedy} "manualTest" prgm
+    
+    let (exit,stdout) = executeInDir {allocation = AffineGreedy; optimization = true} "manualTest" prgm
     do printfn "std: %s" stdout
     do printfn "code: %i" exit
     1

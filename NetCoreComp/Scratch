@@ -1,0 +1,7 @@
+
+  let graph = ml |> toGraph
+  let traverals = graph |> getTraversals
+  let isUsed nodeId node = 
+    match node.instruction, node.instruction |> getWrittenVariables with
+    | (_, None) | (CallI _, _) -> true //Call is the only function with writes and side effects.
+    | _, Some x -> traverals |> Seq.exists (fun (p,q) -> (p = x) && (q.usedAssignments |> List.contains nodeId))

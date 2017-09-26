@@ -50,7 +50,6 @@ let serializeInstruction instr = state {
     | RetA -> handleOp0 "ret"
     | PushA l -> handleOp1Loc "push" (Reg l)
     | PopA l -> handleOp1Loc "pop" (Reg l)
-    | Nop -> ""
   match instr with 
   | AddA (Reg RSP, Imm i) -> do! updateAdjustment i
   | SubA (Reg RSP, Imm i) -> do! updateAdjustment -i

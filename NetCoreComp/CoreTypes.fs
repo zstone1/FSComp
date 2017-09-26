@@ -10,6 +10,7 @@ type RegAlloctionType = StackOnly | RegGreedy | AffineGreedy
 
 type Settings = {
   allocation : RegAlloctionType
+  optimization : bool
 }
 
 let public failComp s = raise (CompilerError s)

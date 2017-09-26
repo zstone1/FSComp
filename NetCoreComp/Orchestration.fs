@@ -18,13 +18,13 @@ let compile settings =
   parseProgram 
   >> convertToAST
   >> (flattenToIL |> uncurry)
-  >> if true then propogateConstants else id
-  //Dead brach pruning is required for variable unification to work. so it must always happen just before ML is produced.
+  >> if settings.optimization then propogateConstants else id
+  //Dead brach pruning is required for variable unification to work. so it must always happen before ML is produced.
   >> pruneDeadBranches 
   >> toML
   >> (unifyVariables settings.allocation)
   >> convertToAssembly
-  >> if true then peepHoleOptimize else id
+  >> if settings.optimization then peepHoleOptimize else id
   >> serializeModule
 
 let private testRoot = "/home/zach/cmp/TestOutput/"

@@ -33,7 +33,6 @@ type Assembly =
   | PopA of Register
   | RetA
   | SyscallA
-  | Nop
 
 let getSaveRegs used regs = 
   used 
