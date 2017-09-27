@@ -56,9 +56,9 @@ let private colorML coloring x =
                   |> Seq.map (snd_set List.ofSeq)
                   |> Map.ofSeq
   let afinity = allAffinities x
-  coloring interference afinity |>exec<| Map.empty
+  coloring interference afinity 
 
-let private replaceVar (coloring:Map<_,_>) = (replaceVar' coloring) >> Option.get
+let private replaceVar (coloring:Map<_,_>) = (tryReplaceVar coloring) >> Option.get
 
 let private unifyVars c = mapInstructBasic (replaceVar c)
 

@@ -12,44 +12,34 @@ let regColors = (List.map Reg [RDI;RSI;RDX;RCX;R8;R9;R15; R14; R13; R12; RBP; RB
 let stackColors = (Seq.initInfinite (Stack << VarStack) )
 let colors = Seq.append regColors stackColors
 
-let replaceVar' (coloring:Map<_,_>) = function
+let tryReplaceVar (coloring:Map<_,_>) = function
   | MLVarName _ as v -> coloring |> Map.tryFind v
   | (RegVar r) -> Reg r |> Some
   | (IncomingStack i) -> Stack (PreStack i) |> Some
   | OutgoingStack -> Stack PostStack |> Some
 
 
-let private assignColor (color) (node : MixedVar) = state {
-   do! updateStateU <| addOrUpdate node color (konst color)
-   return color
-}
+let private assignColor (node : MixedVar) (color) = 
+  updateStateU <| addOrUpdate node color (konst color)
 
-
-let private validateColoring (adjNodes) thisColor = state {
-  let! coloringSoFar = getState
-  let colors = adjNodes |> List.choose (Map.tryFind|>flip<| coloringSoFar)
-  if colors |> List.contains thisColor 
-  then failComp "Graph coloring failed due to bad fixed colors"
-  else return ()
-}
 ///Retains color for those variables that are in fixed positions
 ///Otherwise use @pickAndAssignColor
-let private colorGraph pickAndAssignColor (g: Map<_,_>) = state {
-  let sorted = List.sortBy (fst >> function 
-    | RegVar _ | IncomingStack _ | OutgoingStack _ -> 0
-    | _ -> 1)
-  for (key, adjs) in sorted (g |> Map.toList ) do
-    let! newColor = 
-      match key with
-      | (RegVar r)  -> key |> assignColor (Reg r) 
-      | (IncomingStack i)  -> key |> assignColor (Stack (PreStack i)) 
-      | OutgoingStack -> key |> assignColor (Stack PostStack)
-      | _ -> pickAndAssignColor key adjs
-    //This makes assumptions about the ml being valid,
-    //in the sense of two fixed variables won't be in the same 
-    //place at the same time. This will fail fast if it's not valid.
-    //It can always be patched by adding more temp variables.
-    do! validateColoring g.[key] newColor
+let private colorGraph pickColor (g: Map<_,_>) vars = state {
+  //color fixed variables first
+  let splitFixed = List.choose (fst >> function 
+    | RegVar _ | IncomingStack _ | OutgoingStack _ as x 
+      -> tryReplaceVar Map.empty x |> Option.map (fun i -> (x,i))
+    | _ -> None)
+  for (fixedVar, loc) in splitFixed (g |> Map.toList ) do
+    do! loc |> assignColor fixedVar
+  
+  //Now for the remaining variables
+  for key in vars do
+    let adjs = g.[key]
+    match tryReplaceVar Map.empty key with
+    | Some x -> return ()
+    | None -> let! c = (pickColor key adjs) 
+              do! c |> assignColor key
 }
 
 let greedyNextColor cs = Seq.find (fun c -> not <| Seq.contains c cs)
@@ -58,7 +48,7 @@ let private pickAndAssignGreedy colorSet key adjs = state {
   let! coloringSoFar = getState
   let disallowed = adjs |> Seq.choose (Map.tryFind |> flip <| coloringSoFar)
   let c = greedyNextColor disallowed colorSet
-  return! assignColor c key
+  return c
 }
 
 let private pickAndAssignAfineGreedy (afinity:Map<Atom<_>, Atom<_> list>) key adjs  = state {
@@ -69,7 +59,7 @@ let private pickAndAssignAfineGreedy (afinity:Map<Atom<_>, Atom<_> list>) key ad
              |> List.distinct
   let afinities = friends
                |> List.choose (function 
-                  | VarAtom v -> replaceVar' coloringSoFar v
+                  | VarAtom v -> tryReplaceVar coloringSoFar v
                   | DataRefAtom _ | IntLitAtom _ -> None)
 
   let disallowed = adjs |> Seq.choose (Map.tryFind |>flip<| coloringSoFar)
@@ -79,32 +69,26 @@ let private pickAndAssignAfineGreedy (afinity:Map<Atom<_>, Atom<_> list>) key ad
       then yield i
   ]
   match candidateFriends with
-  | [] -> return! assignColor (greedyNextColor disallowed colors) key
-  | x::xs -> return! assignColor x key
+  | [] -> return (greedyNextColor disallowed colors) 
+  | x::xs -> return x 
 }
-let private pickAndAssignAffineBrute (afinity:Map<Atom<_>, Atom<_> list>) key adjs  = state {
-  let! coloringSoFar = getState
-  let friends = afinity.[key |> VarAtom] 
-             |> List.collect (fun i -> afinity.[i])
-             |> List.collect (fun i -> afinity.[i])
-             |> List.distinct
-  let afinities = friends
-               |> List.choose (function 
-                  | VarAtom v -> replaceVar' coloringSoFar v
-                  | DataRefAtom _ | IntLitAtom _ -> None)
 
-  let disallowed = adjs |> Seq.choose (Map.tryFind |>flip<| coloringSoFar)
-  let candidateFriends = [
-    for i in afinities do 
-      if disallowed |> Seq.contains i |> not
-      then yield i
-  ]
-  match candidateFriends with
-  | [] -> return! assignColor (greedyNextColor disallowed colors) key
-  | x::xs -> return! assignColor x key
-}
-let colorGraphGreedy inter afinities = colorGraph (pickAndAssignGreedy colors) inter
+let colorGraphGreedy inter afinities = colorGraph (pickAndAssignGreedy colors) inter (inter |> allKeys) |>exec<| Map.empty
 
-let colorGraphStackOnly inter afinities = colorGraph (pickAndAssignGreedy stackColors) inter
+let colorGraphStackOnly inter afinities = colorGraph (pickAndAssignGreedy stackColors) inter (inter |> allKeys) |>exec<| Map.empty
 
-let colorGraphAfineGreedy inter affinites = colorGraph (pickAndAssignAfineGreedy affinites) inter
+let colorGraphAfineGreedy inter affinites = colorGraph (pickAndAssignAfineGreedy affinites) inter (inter |> allKeys) |>exec<| Map.empty
+
+let colorGraphAffineBrute inter affinities = 
+  let permutedArgs = 
+    inter 
+    |> allKeys 
+    |> Seq.filter (function 
+       | MLVarName _ -> true
+       | _ -> false)
+    |> Seq.toList
+    |> permutations
+  let 
+  
+
+  1

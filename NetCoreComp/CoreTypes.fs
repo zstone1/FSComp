@@ -41,6 +41,14 @@ let suffixes l =
 let separate f l = 
   List.fold (fun (y,n) x -> if f x then (x::y, n) else (y,x::n)) ([],[]) l
 
+let rec insertions x = function
+    | []             -> [[x]]
+    | (y :: ys) as l -> (x::l)::(List.map (fun x -> y::x) (insertions x ys))
+
+let rec permutations = function
+    | []      -> seq [ [] ]
+    | x :: xs -> Seq.concat (Seq.map (insertions x) (permutations xs))
+
 let cons x xs = x :: xs
 
 let fst_set f (a,b) = (f a, b)
