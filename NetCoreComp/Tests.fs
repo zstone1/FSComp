@@ -16,7 +16,10 @@ open Orchestration
 
 
 let execute setting s =
-  executeInDir setting (sprintf "%s_%A" TestContext.CurrentContext.Test.Name setting.allocation) s
+  let testName =  TestContext.CurrentContext.Test.Name
+  let x = executeInDir setting (sprintf "%s_%A" testName setting.allocation) s
+  do TestContext.Error.WriteLine(testName + "_" + chromaticNumSum.ToString())
+  x
              
 let checkvalForSettings (f: _ -> 'a) (i:'a) s settings = 
   try 

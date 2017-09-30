@@ -4,7 +4,6 @@ open FSharp.Collections;
 open FSharpx
 open Flatten
 open InjectMoves
-open AssignHomes
 open ASTBuilder
 open FSharpx.State
 open MixedLang

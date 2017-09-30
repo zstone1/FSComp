@@ -20,9 +20,9 @@
     <Compile Include="SSAForm.fs"/>
     <Compile Include="ConstantProp.fs"/>
     <Compile Include="PruneDeadCode.fs"/>
+    <Compile Include="CopyProp.fs"/>
     <Compile Include="GraphColorings.fs"/>
     <Compile Include="Unification.fs"/>
-    <Compile Include="AssignHomes.fs"/>
     <Compile Include="InjectMoves.fs"/>
     <Compile Include="PeepHole.fs"/>
     <Compile Include="Assembly.fs"/>

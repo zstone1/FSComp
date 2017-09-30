@@ -23,7 +23,7 @@ let private toInterferenceGraph (s:seq<_>) = query {
 
                
 let computeAffinity = function 
-  | AssignI (x,y) -> [(VarAtom x, y); (y, VarAtom x)]
+  | AssignI (x,VarAtom y) -> [(x, y); (y, x)]
   | _ -> []
 
 let allAffinities ml = 
@@ -38,9 +38,9 @@ let callerSave = [RAX; RDI; RSI; RDX; RCX; R8; R9; R10; R11;]
 let getInterferenceMap ml = seq {
   let graph = ml |> toGraph
 
-  for (v, trav) in graph |> getTraversals do
+  for trav in graph |> getTraversals do
     for edge in trav.witnessed do 
-      yield (v, edge)
+      yield (trav.liveVar, edge)
   
   for x in graph.nodes do
     match x.Value with
@@ -66,6 +66,7 @@ type UnifiedSignature = CompSignature<Location>
 
 let private unifyVariablesInFunc colorAlgo (signature: CompSignature<_>, ml) = 
   let coloring= colorML colorAlgo ml
+  chromaticNumSum <- chromaticNumSum + (coloring |> mapValues |> Seq.distinct |> Seq.length)
   let newIl = ml |> List.map (unifyVars coloring)
   let newSig = 
     {

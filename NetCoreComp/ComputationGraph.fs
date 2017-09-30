@@ -130,7 +130,8 @@ let toGraph l =
   }
  
 
-type LivenessTraversal = {
+type LivenessTraversal<'a> = {
+  liveVar : 'a
   witnessed : (NodeId * NodeId) list;
   usedAssignments : NodeId List;}
 ///Traverses up the computation graph, starting at @n, to determine all of the nodes where @v is alive (assuming it is alive at below or in @n) 
@@ -151,7 +152,7 @@ let rec private trackParents' (v  ) (compGraph : DiGraph<_>) n = state {
          else do! mapU (trackParents' v compGraph) parents
 }        
 
-let private trackParents v compGraph n = exec (trackParents' v compGraph n) {witnessed = []; usedAssignments = []}
+let trackParents v compGraph n = exec (trackParents' v compGraph n) {witnessed = []; usedAssignments = []; liveVar = v}
 
 ///Returns a pair of Variable->int for every node where 
 ///the variable is live.
@@ -160,5 +161,5 @@ let getTraversals compGraph = query {
   //TODO: optimize away writes to variables that are never read from.
   for var in getReadVariables c.instruction do
   let result = trackParents var compGraph k 
-  select (var, result)
+  select result
 }

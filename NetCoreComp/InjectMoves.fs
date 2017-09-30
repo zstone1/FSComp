@@ -4,7 +4,6 @@ open FSharp.Collections;
 open FSharpx
 open Flatten
 open ComputationGraph
-open AssignHomes
 open FSharpx.State
 open Option
 open MixedLang
@@ -34,6 +33,9 @@ type Assembly =
   | RetA
   | SyscallA
 
+let getReadLabels = function 
+  | JnzA n |JmpA n | CallA n -> Some n
+  | _ -> None
 let getSaveRegs used regs = 
   used 
   |> List.choose (function Reg x -> Some x | _ -> None)

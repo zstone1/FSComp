@@ -6,7 +6,9 @@ open FSharpx.State
 exception CompilerError of string with 
   override x.ToString() = sprintf "Failed to compile %A" x.Data0
 
-type RegAlloctionType = StackOnly | RegGreedy | AffineGreedy
+let mutable chromaticNumSum = 0
+
+type RegAlloctionType = StackOnly | RegGreedy | AffineGreedy 
 
 type Settings = {
   allocation : RegAlloctionType
@@ -20,10 +22,17 @@ let tryExactlyOne = function
   | [x] -> x |> Some
   | _ -> None
 
+let intersect l1 l2 = [
+  for i in l1 do
+    if l2 |> List.contains i
+    then yield i
+]
+
 let (|SplitAt|) i = function 
   | xs when List.length xs < i -> (xs,[])
   | xs -> (List.take i xs, List.skip i xs)
 
+///Finds the first member of the list that matches the predicate, and unzips the list at that point
 let (|MemberF|_|) f l = 
   match List.tryFindIndex f l with
   | Some i -> (List.take i l, l.[i], List.skip (i+1) l) |> Some

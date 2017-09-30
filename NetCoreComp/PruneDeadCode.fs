@@ -12,7 +12,7 @@ let private pruneUnusedAssignments ml =
   //Note that it's critical that everything here retains order.
   let graph = ml |> toGraph
   let traverals = graph |> getTraversals
-  let usedIds = traverals |> Seq.collect (fun (_,i) -> i.usedAssignments)
+  let usedIds = traverals |> Seq.collect (fun i -> i.usedAssignments)
   let isUsed nodeId = function  
     | {instruction = AssignI (ILVarName _, _)} -> usedIds |> Seq.contains nodeId 
     | _ -> true

@@ -4,7 +4,6 @@ open FSharp.Collections;
 open FSharpx
 open Flatten
 open ComputationGraph
-open AssignHomes
 open FSharpx.State
 open Option
 open MixedLang

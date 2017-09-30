@@ -67,6 +67,7 @@ module Prelude =
     let rec fix3 f x y z = f (fix3 f) x y z
 
     let public trd (_,_,c) = c
+    let public fst3 (a,_,_) = a
 
 
     /// Sequencing operator like Haskell's ($). Has better precedence than (<|) due to the
