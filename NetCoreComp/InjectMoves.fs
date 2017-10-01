@@ -21,7 +21,7 @@ type Move =
 type Assembly = 
   | CmpA of Location * Location
   | MovA of Location * Location
-  | JnzA of LabelMarker
+  | JzA of LabelMarker
   | JmpA of LabelMarker
   | LabelA of LabelMarker
   | AddA of Location * Location
@@ -34,7 +34,7 @@ type Assembly =
   | SyscallA
 
 let getReadLabels = function 
-  | JnzA n |JmpA n | CallA n -> Some n
+  | JzA n |JmpA n | CallA n -> Some n
   | _ -> None
 let getSaveRegs used regs = 
   used 
@@ -65,7 +65,7 @@ let getMoves usedLocs endLab = function
   | IMulI (var,at)  -> movToReg IMulA var at
   | CmpI (var, at) -> movToReg CmpA var at
   | JmpI l -> [], [JmpA l], []
-  | JnzI l -> [], [JnzA l], []
+  | JzI l -> [], [JzA l], []
   | LabelI l -> [], [LabelA l], []
   | AssignI (var, at) -> [], [], [MovLoc(var, at |> fromAtom)] 
   | ReturnI v -> [], [JmpA endLab], []

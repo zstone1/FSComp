@@ -47,7 +47,7 @@ type StdGraph<'a, 't> when 't :> seq<'a> = Graph<'a,'t>
 ///What kind of Next does each instruction use?
 let private (|Return|StepNext|StepJump|BranchJump|) = function
   | ReturnI _ -> Return
-  | JnzI l  -> BranchJump l
+  | JzI l  -> BranchJump l
   | JmpI l  -> StepJump l
   | CmpI _ | AssignI _ | AddI _ | LabelI _ 
   | IMulI _ | SubI _ | CallI _ 
@@ -95,7 +95,7 @@ let getReadVariables = function
     -> match b with 
        | VarAtom b' -> [a; b']
        | IntLitAtom _ | DataRefAtom _ -> [a]
-  | JmpI _ | JnzI _ | LabelI _ | AssignI _ 
+  | JmpI _ | JzI _ | LabelI _ | AssignI _ 
     -> []
 
 let getWrittenVariables = function 

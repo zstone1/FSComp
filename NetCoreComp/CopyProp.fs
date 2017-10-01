@@ -9,19 +9,17 @@ open MixedLang
 open FSOption
 
 
-type CopyTraversal<'a>= {var: 'a; initialAssign : NodeId; coverage : NodeId list; value : Atom<'a>}
+type CopyTraversal<'a>= {var: 'a; initialAssign : NodeId; coverage : NodeId list; value : 'a}
 let getProp g n allTravs trav =
   let result v a c= {initialAssign = n; var = v; value = a; coverage = c} |> Some
   function 
-  | AssignI (v, (IntLitAtom _ as a)) | AssignI (v, (DataRefAtom _ as a)) 
-    -> result v a (trav.witnessed |> List.map snd)
   | AssignI (v, VarAtom v') 
     -> let k = allTravs 
             |> List.filter (fun i -> (i.liveVar = v') 
                                   && (i.witnessed |> List.exists ( snd >> ((=) n) )))
-            |> List.maxBy (fun i -> i.witnessed.Length)
-       let coverage = k.witnessed |> intersect trav.witnessed |> List.map snd
-       result v (VarAtom v') coverage
+            |> List.collect (fun i -> i.witnessed)
+       let coverage = k |> intersect trav.witnessed |> List.map snd
+       result v v' coverage
   | _ -> None
 
 let getCopyTraversals (g : Graph<_,_>) allTravs trav =  maybe {
@@ -35,14 +33,25 @@ let private propogate g constTrav =
   let propConst key node =
     if (constTrav.coverage |> List.contains key)
     then 
+
+        let replace i = if constTrav.var = i
+                        then constTrav.value
+                        else i
+        let replaceAt = function 
+          | VarAtom x -> x |> replace |> VarAtom
+          | x -> x
         let newInstr =
-          mapInstruct
-            id
-            (fun i -> if (VarAtom constTrav.var) = i
-                      then constTrav.value
-                      else i)
-            id
-            node.instruction
+          match node.instruction with
+          | AddI (a,b) -> AddI (a, replaceAt b)
+          | CmpI (a,b) -> CmpI (replace a, replaceAt b)
+          | SubI (a,b) -> SubI (a, replaceAt b)
+          | IMulI (a,b) -> IMulI (a, replaceAt b)
+          | AssignI (a,b) -> AssignI (a, replaceAt b)
+          | JmpI (l) -> JmpI (l)
+          | JzI (l) -> JzI (l)
+          | CallI (v,l,args) -> CallI (v, l, List.map replace args)
+          | LabelI (l) -> LabelI (l)
+          | ReturnI (v) -> ReturnI (replace v)
         {node with instruction = newInstr}
      
     else node
@@ -64,4 +73,4 @@ let rec propogateUntilDone' lastTime il =
   else propogateUntilDone' il (propogateAllConstants il)
 
 let propogateUntilDone il = propogateUntilDone' [] il
-let propogateConstants m = {m with funcs = m.funcs |> List.map (snd_set propogateUntilDone)}
+let propogateCopies m = {m with funcs = m.funcs |> List.map (snd_set propogateUntilDone)}

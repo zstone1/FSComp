@@ -16,7 +16,7 @@ type Atom<'v> =
 type Instruct<'v> = 
   | CmpI of 'v * Atom<'v>
   | AssignI of 'v * Atom<'v>
-  | JnzI of LabelMarker
+  | JzI of LabelMarker
   | JmpI of LabelMarker
   | CallI of 'v * LabelMarker * 'v list
   | ReturnI of 'v
@@ -37,7 +37,7 @@ let mapInstruct f g h = function
   | IMulI (a,b) -> IMulI (f a, g b)
   | AssignI (a,b) -> AssignI (f a, g b)
   | JmpI (l) -> JmpI (h l)
-  | JnzI (l) -> JnzI (h l)
+  | JzI (l) -> JzI (h l)
   | CallI (v,l,args) -> CallI (f v, h l, List.map f args)
   | LabelI (l) -> LabelI (h l)
   | ReturnI (v) -> ReturnI (f v)
@@ -124,7 +124,7 @@ let rec flattenStatement = function
       let! skipIf = makeNamePre "if_lab" |>> LabelName
       let! guardVar = flattenExpression guard
       yield CmpI (guardVar, IntLitAtom 0)
-      yield JnzI skipIf
+      yield JzI skipIf
       do! mapU flattenStatement body 
       yield LabelI skipIf
       return () }
@@ -134,7 +134,7 @@ let rec flattenStatement = function
       yield LabelI startLab
       let! guardVar = flattenExpression guard
       yield CmpI (guardVar, IntLitAtom 0)
-      yield JnzI endLab
+      yield JzI endLab
       do! mapU flattenStatement body
       yield JmpI startLab
       yield LabelI endLab }

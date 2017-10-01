@@ -12,6 +12,7 @@ open MixedLang
 open PeepHole
 open PruneDeadCode
 open ConstantProp
+open CopyProp
 open FSharpx
 
 let compile settings =
@@ -20,8 +21,10 @@ let compile settings =
   >> (flattenToIL |> uncurry)
   >> if settings.optimization then propogateConstants else id
   //Dead brach pruning is required for variable unification to work. so it must always happen before ML is produced.
-  >> pruneDeadBranches 
+  >> pruneDeadBranchesIL
   >> toML
+  >> propogateCopies
+  >> pruneDeadBranchesML
   >> (unifyVariables settings.allocation)
   >> convertToAssembly
   >> if settings.optimization then peepHoleOptimize else id

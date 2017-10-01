@@ -61,7 +61,7 @@ let ``simple adding`` () = checkCode 4 @"
 [<Test>]
 let ``simple if`` () = checkCode 2 @"
         public int main(){
-        int x = 1;
+        int x = 0;
         if(x)
         {
           return 1;
@@ -73,7 +73,7 @@ let ``simple if`` () = checkCode 2 @"
 [<Test>]
 let ``simple if skip`` () = checkCode 1 @"
     public int main(){
-        int x = 0;
+        int x = 1;
         if(x)
         {
           return 1;
@@ -139,13 +139,13 @@ let ``sub and add`` () = checkCode 2 @"
       return x;
   }"
 
-[<Test>]
+//[<Test>]
 let ``while with terminator`` () =checkCode 2 @" 
   public int main(){
       int terminate = 0;
       int i = 10;
       while (terminate){
-        i = i-1;
+        i = i - 1;
         if(i - 2){
             terminate = 1;
         }
@@ -311,9 +311,9 @@ let ``unused params`` () = checkCode 13 @"
       return i + j + k;
     }"
 [<Test>]
-let ``args never unified`` () = checkCode 1 @"
+let ``args never unified`` () = checkCode 3 @"
     public int main(){
-      return Foo(1,2);
+      return Foo(0,2);
     }
 
     public int Foo(int i, int j){
@@ -322,12 +322,12 @@ let ``args never unified`` () = checkCode 1 @"
         j = 10;
         return j;
       }
-      return i;
+      return i+3;
     }"
 [<Test>]
-let ``args never unified 2`` () = checkCode 2 @"
+let ``args never unified 2`` () = checkCode 10 @"
     public int main(){
-      return Foo(1,2);
+      return Foo(3,1);
     }
 
     public int Foo(int k, int j){
@@ -372,5 +372,20 @@ let ``unused add`` () = checkCode 4 @"
 
     public int foo(){
       return 10;
+    }
+"
+
+//[<Test>]
+let ``gcd`` () = checkCode 4 @"
+    public int main(){
+      return gcd(12,16);
+    }
+
+    public int gcd(int a, int b){
+      int current = a;
+      int candidate = a;
+      while(current){
+        if()
+      }
     }
 "

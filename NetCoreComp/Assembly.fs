@@ -41,7 +41,7 @@ let serializeInstruction instr = state {
     | SubA (l1,l2) -> handleOp2 "sub" l1 l2
     | IMulA (l1,l2) -> handleOp2 "imul" l1 l2
     | CmpA (l1,l2) -> handleOp2 "cmp" l1 l2
-    | JnzA (LabelName l) -> handleOp1 "jnz" l
+    | JzA (LabelName l) -> handleOp1 "jz" l
     | JmpA (LabelName l) -> handleOp1 "jmp" l
     | SyscallA -> handleOp0 "syscall"
     | LabelA (LabelName l) -> sprintf "%s:" l

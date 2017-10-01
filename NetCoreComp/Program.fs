@@ -14,21 +14,18 @@ open Orchestration
 [<EntryPoint>]
 let main argv =
   try
-    let prgm = @"
-    public int main(){
-      int x = 1;
-      int y = 5;
-      return Foo(x,y);
-    }
-
-    public int Foo(int i, int j){
-      return Bar(j,i);
-    }
-    
-    public int Bar(int i, int j){
-      return i - j;
-    }
-    "
+    let prgm = @" 
+  public int main(){
+      int terminate = 0;
+      int i = 10;
+      while (terminate){
+        i = i-1;
+        if(i - 2){
+            terminate = 1;
+        }
+      }
+      return i;
+  }"
     
     let (exit,stdout) = executeInDir {allocation = AffineGreedy; optimization = true} "manualTest" prgm
     do printfn "std: %s" stdout
