@@ -19,8 +19,8 @@ let main argv =
       int terminate = 0;
       int i = 10;
       while (terminate){
-        i = i-1;
-        if(i - 2){
+        i = i - 1;
+        if(i == 2){
             terminate = 1;
         }
       }

@@ -21,7 +21,10 @@ type Move =
 type Assembly = 
   | CmpA of Location * Location
   | MovA of Location * Location
+  | CMoveA of Location * Location
+  | CMovneA of Location * Location
   | JzA of LabelMarker
+  | JnzA of LabelMarker
   | JmpA of LabelMarker
   | LabelA of LabelMarker
   | AddA of Location * Location
@@ -66,9 +69,11 @@ let getMoves usedLocs endLab = function
   | CmpI (var, at) -> movToReg CmpA var at
   | JmpI l -> [], [JmpA l], []
   | JzI l -> [], [JzA l], []
+  | JnzI l -> [], [JnzA l], []
   | LabelI l -> [], [LabelA l], []
   | AssignI (var, at) -> [], [], [MovLoc(var, at |> fromAtom)] 
   | ReturnI v -> [], [JmpA endLab], []
+  | SeteI v -> [], [MovA (Reg R10, Imm 1); CMoveA (v, Reg R10); MovA (Reg R10, Imm 0); CMovneA (v,Reg R10)], []
 
   //Ok, this is where it gets weird. We assume the ML puts rtn in RAX correctly
   //And we put requirements during unification on caller save registers.

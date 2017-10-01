@@ -59,6 +59,7 @@ let arithHelper s p = InfixOperator(s, spaces, p, Associativity.Left, fun x y ->
 opp.AddOperator(arithHelper "-" 1)
 opp.AddOperator(arithHelper "+" 1)
 opp.AddOperator(arithHelper "*" 2)
+opp.AddOperator(arithHelper "==" 3)
 
 let expr = 
    let parseInt = pint32 .>> spaces |>> IntLit

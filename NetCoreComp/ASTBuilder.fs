@@ -104,6 +104,7 @@ let hardCodedFunctions = [
   {ty = IntTy; name = PlusName; argTys = [IntTy; IntTy] |> Some};
   {ty = IntTy; name = MinusName; argTys = [IntTy; IntTy] |> Some};
   {ty = IntTy; name = MultName; argTys = [IntTy; IntTy] |> Some};
+  {ty = IntTy; name = CmpName; argTys = [IntTy; IntTy] |> Some};
   {ty = IntTy; name = "printf"; argTys = None}
 ]
 

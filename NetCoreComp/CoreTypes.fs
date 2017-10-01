@@ -90,3 +90,5 @@ let PlusName = "_+"
 let MinusName = "_-"
 [<Literal>]
 let MultName = "_*"
+[<Literal>]
+let CmpName = "_=="

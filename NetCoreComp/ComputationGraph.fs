@@ -47,10 +47,10 @@ type StdGraph<'a, 't> when 't :> seq<'a> = Graph<'a,'t>
 ///What kind of Next does each instruction use?
 let private (|Return|StepNext|StepJump|BranchJump|) = function
   | ReturnI _ -> Return
-  | JzI l  -> BranchJump l
-  | JmpI l  -> StepJump l
+  | JzI l | JnzI l -> BranchJump l
+  | JmpI l -> StepJump l
   | CmpI _ | AssignI _ | AddI _ | LabelI _ 
-  | IMulI _ | SubI _ | CallI _ 
+  | IMulI _ | SubI _ | CallI _ | SeteI _
       -> StepNext
 
 let private computeEdges prgm f x xs = 
@@ -96,12 +96,18 @@ let getReadVariables = function
        | VarAtom b' -> [a; b']
        | IntLitAtom _ | DataRefAtom _ -> [a]
   | JmpI _ | JzI _ | LabelI _ | AssignI _ 
+  | SeteI _ | JnzI _
     -> []
 
 let getWrittenVariables = function 
-  | AssignI (x,_) | CallI (x,_,_) -> Some x
-  | AddI(v,_) | SubI (v,_) | IMulI (v,_) -> Some v
-  | _ -> None
+  | AssignI (x,_) | CallI (x,_,_) | SeteI x 
+    -> Some x
+  | AddI(v,_) | SubI (v,_) | IMulI (v,_) 
+    -> Some v
+  | ReturnI _ | CmpI _ | JmpI _ | JzI _ 
+  | LabelI _ | JnzI _
+    -> None
+
 
  
 let private setIns f s = {s with ins = f s.ins}

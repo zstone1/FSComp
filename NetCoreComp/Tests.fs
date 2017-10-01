@@ -139,14 +139,14 @@ let ``sub and add`` () = checkCode 2 @"
       return x;
   }"
 
-//[<Test>]
+[<Test>]
 let ``while with terminator`` () =checkCode 2 @" 
   public int main(){
       int terminate = 0;
       int i = 10;
       while (terminate){
         i = i - 1;
-        if(i - 2){
+        if((i - 2) == 0){
             terminate = 1;
         }
       }

@@ -55,8 +55,9 @@ let toMLAtom vMap= function
 let callingConvention = [RDI; RSI; RDX; RCX; R8; R9]
 
 let getRequirements = function 
-  | AddI _  | SubI _ | IMulI _ 
+  | AddI _  | SubI _ | IMulI _ | SeteI _
   | AssignI _ | JmpI _ | JzI _ | LabelI _
+  | JnzI _
     -> []
   | CmpI (v,_)
     -> []

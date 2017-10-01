@@ -51,7 +51,9 @@ let private propogate g constTrav =
           | JzI (l) -> JzI (l)
           | CallI (v,l,args) -> CallI (v, l, List.map replace args)
           | LabelI (l) -> LabelI (l)
+          | JnzI l -> JnzI l
           | ReturnI (v) -> ReturnI (replace v)
+          | SeteI v -> SeteI v
         {node with instruction = newInstr}
      
     else node

@@ -17,6 +17,7 @@ type Instruct<'v> =
   | CmpI of 'v * Atom<'v>
   | AssignI of 'v * Atom<'v>
   | JzI of LabelMarker
+  | JnzI of LabelMarker
   | JmpI of LabelMarker
   | CallI of 'v * LabelMarker * 'v list
   | ReturnI of 'v
@@ -24,6 +25,7 @@ type Instruct<'v> =
   | AddI of 'v * Atom<'v>
   | SubI of 'v * Atom<'v>
   | IMulI of 'v * Atom<'v>
+  | SeteI of 'v
 
 type ILVariable = ILVarName of string
 
@@ -38,9 +40,11 @@ let mapInstruct f g h = function
   | AssignI (a,b) -> AssignI (f a, g b)
   | JmpI (l) -> JmpI (h l)
   | JzI (l) -> JzI (h l)
+  | JnzI l -> JnzI (h l)
   | CallI (v,l,args) -> CallI (f v, h l, List.map f args)
   | LabelI (l) -> LabelI (h l)
   | ReturnI (v) -> ReturnI (f v)
+  | SeteI v -> SeteI (f v)
 
 let mapInstructBasic f = 
   let atomMap = function 
@@ -97,6 +101,13 @@ let getExprValue flatten = function
       handleArith SubI flatten x y
   | ASTFunc ({name = MultName; argTys = Some [IntTy; IntTy]}, [x;y]) ->
       handleArith IMulI flatten x y
+  | ASTFunc ({name = CmpName; argTys = Some [IntTy; IntTy]}, [x;y]) -> state {
+    let! xVar = flatten x
+    let! yVar = flatten y
+    let! newVar = makeVariable
+    yield CmpI (xVar, yVar |> VarAtom)
+    yield SeteI (newVar)
+    return newVar |> VarAtom }
   | ASTFunc (s, (SplitAt 6 (l,r) as args)) -> state {
     //A subtelty here. the args must be computed before PrepareCall,
     //Otherwise nested function calls produce incorrect stack alignment.
@@ -134,7 +145,7 @@ let rec flattenStatement = function
       yield LabelI startLab
       let! guardVar = flattenExpression guard
       yield CmpI (guardVar, IntLitAtom 0)
-      yield JzI endLab
+      yield JnzI endLab
       do! mapU flattenStatement body
       yield JmpI startLab
       yield LabelI endLab }

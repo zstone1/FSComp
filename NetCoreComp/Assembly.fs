@@ -42,6 +42,7 @@ let serializeInstruction instr = state {
     | IMulA (l1,l2) -> handleOp2 "imul" l1 l2
     | CmpA (l1,l2) -> handleOp2 "cmp" l1 l2
     | JzA (LabelName l) -> handleOp1 "jz" l
+    | JnzA (LabelName l) -> handleOp1 "jnz" l
     | JmpA (LabelName l) -> handleOp1 "jmp" l
     | SyscallA -> handleOp0 "syscall"
     | LabelA (LabelName l) -> sprintf "%s:" l
@@ -49,6 +50,8 @@ let serializeInstruction instr = state {
     | RetA -> handleOp0 "ret"
     | PushA l -> handleOp1Loc "push" (Reg l)
     | PopA l -> handleOp1Loc "pop" (Reg l)
+    | CMoveA (l1, l2) -> handleOp2 "cmove" l1 l2
+    | CMovneA (l1, l2) -> handleOp2 "cmovne" l1 l2
   match instr with 
   | AddA (Reg RSP, Imm i) -> do! updateAdjustment i
   | SubA (Reg RSP, Imm i) -> do! updateAdjustment -i
