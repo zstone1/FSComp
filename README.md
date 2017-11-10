@@ -31,4 +31,6 @@ To get started reading this code, first consider the file dependency order:
   - IL -> ML. ML stands for Mixed Language. As in a mix of assembly and IL. This representation uses IL looking instructions but variables become physical locations (I.E registers and memory). This step unifies all of the temp variables produced above. 
   - ML -> Assembly. This step is about picking the right assembly instructions for each IL one. Mostly this involves picking the right moves, pushes, pops, ect. 
   - Assembly -> string. This step is mostly serialization. Some details about keeping track of stack depth are managed here too.
+  
+4) At this point, you can dig into whatever look most interesting: register allocation, constant propogation, ect. 
 
