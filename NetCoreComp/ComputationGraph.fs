@@ -135,10 +135,15 @@ let toGraph l =
     adj = adj
   }
  
-
+///One variables journey though a path on the computation graph.
+///The variable may change value (Not SSA!) but the variable is 
+///alive between every pair of witnesses.
 type LivenessTraversal<'a> = {
+  ///The variable alive on each witnessed edge
   liveVar : 'a
+  ///The edges witnessed in this traveral
   witnessed : (NodeId * NodeId) list;
+  ///The assigments that may define the value of @liveVar
   usedAssignments : NodeId List;}
 ///Traverses up the computation graph, starting at @n, to determine all of the nodes where @v is alive (assuming it is alive at below or in @n) 
 let rec private trackParents' (v  ) (compGraph : DiGraph<_>) n = state {

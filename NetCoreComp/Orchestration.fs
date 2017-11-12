@@ -16,18 +16,21 @@ open CopyProp
 open FSharpx
 
 let compile settings =
+  let runIfOptimized f = if settings.optimization then f else id
+
   parseProgram 
   >> convertToAST
   >> (flattenToIL |> uncurry)
-  >> if settings.optimization then propogateConstants else id
-  //Dead brach pruning is required for variable unification to work. so it must always happen before ML is produced.
-  >> pruneDeadBranchesIL
+//  >> pruneDeadBranchesIL
   >> toML
-  >> propogateCopies
+  >> (propogateConstants |> runIfOptimized)
+  >> (propogateCopies |> runIfOptimized)
+
+  //Dead brach pruning is required for variable unification to work. so it must always happen before ML is produced.
   >> pruneDeadBranchesML
   >> (unifyVariables settings.allocation)
   >> convertToAssembly
-  >> if settings.optimization then peepHoleOptimize else id
+  >> (peepHoleOptimize |> runIfOptimized)
   >> serializeModule
 
 let private testRoot = "/home/zach/cmp/TestOutput/"

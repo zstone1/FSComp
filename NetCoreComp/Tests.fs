@@ -310,6 +310,7 @@ let ``unused params`` () = checkCode 13 @"
       k = 10;
       return i + j + k;
     }"
+
 [<Test>]
 let ``args never unified`` () = checkCode 3 @"
     public int main(){

@@ -6,6 +6,7 @@ open FSharpx.State
 exception CompilerError of string with 
   override x.ToString() = sprintf "Failed to compile %A" x.Data0
 
+//For debugging graph coloring efficiency.
 let mutable chromaticNumSum = 0
 
 type RegAlloctionType = StackOnly | RegGreedy | AffineGreedy 

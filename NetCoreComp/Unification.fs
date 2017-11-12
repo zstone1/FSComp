@@ -8,25 +8,29 @@ open ComputationGraph
 open MixedLang
 open GraphColorings
 
-///Given the list of variable -> live node pairs,
+///Given the list of (variable -> live node) pairs,
 ///builds joins against itself to produce the 
 ///adjacency map of the liveness graph.
-let private toInterferenceGraph (s:seq<_>) = query {
-  for (v1, n1) in s do
-  join (v2, n2) in s on (n1 = n2)
-  select (v1, v2) 
-  distinct into x
-  groupBy (fst x) into g 
-  select (g.Key, g |> Seq.map snd |> Seq.filter (fun v' -> v' <> g.Key))
-}
+let private toInterferenceGraph (s:seq<_>) =
+  query {
+    for (v1, n1) in s do
+    join (v2, n2) in s on (n1 = n2)
+    select (v1, v2) 
+    distinct into x
+    groupBy (fst x) into g 
+    let conflicts = g 
+                 |> Seq.map snd 
+                 |> Seq.filter (fun v' -> v' <> g.Key)  //variables don't conflict with themselves
+                 |> Seq.toList
+    select (g.Key, conflicts )  } 
+  |> Map.ofSeq
 
-
-               
 let computeAffinity = function 
   | AssignI (x,VarAtom y) -> [(x, y); (y, x)]
   | _ -> []
 
-let allAffinities ml = 
+///Computes which variables share physical locality.
+let toAffinitiesGraph ml = 
   query {
     for (a,b) in ml |> List.collect computeAffinity do
     groupValBy b a into g
@@ -53,10 +57,8 @@ let private colorML coloring x =
   let interference = x 
                   |> getInterferenceMap 
                   |> toInterferenceGraph
-                  |> Seq.map (snd_set List.ofSeq)
-                  |> Map.ofSeq
-  let afinity = allAffinities x
-  coloring interference afinity 
+  let affinity = toAffinitiesGraph x
+  coloring interference affinity 
 
 let private replaceVar (coloring:Map<_,_>) = (tryReplaceVar coloring) >> Option.get
 
